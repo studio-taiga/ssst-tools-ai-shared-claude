@@ -1481,7 +1481,12 @@ export function WorkspaceApp({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
+                const isMobile =
+                  typeof window !== "undefined" &&
+                  (window.matchMedia("(pointer: coarse)").matches ||
+                    window.innerWidth < 768);
                 if (
+                  !isMobile &&
                   e.key === "Enter" &&
                   !e.shiftKey &&
                   !e.nativeEvent.isComposing
@@ -1490,7 +1495,7 @@ export function WorkspaceApp({
                   void handleSend();
                 }
               }}
-              placeholder="Claude にメッセージを送信... (Shift+Enter で改行)"
+              placeholder="Claude にメッセージを送信..."
               className="w-full resize-none bg-transparent text-base sm:text-sm text-[#eceae4] placeholder-[#78736a] focus:outline-none"
             />
 
