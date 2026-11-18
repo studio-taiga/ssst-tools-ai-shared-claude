@@ -2,6 +2,7 @@
 
 import { FileText, FolderPlus, Plus, Trash2, Upload, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { ProjectFileItem, ProjectItem } from "@/types/app";
 
 interface ProjectModalProps {
@@ -72,11 +73,22 @@ export function ProjectModal({
     setError(null);
     for (const file of Array.from(e.target.files)) {
       try {
-        const text = await file.text();
+        let filename = file.name;
+        let text = "";
+        if (
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf")
+        ) {
+          const extracted = await extractTextFromPdf(file);
+          filename = `${file.name} (${extracted.pageCount}p)`;
+          text = extracted.text;
+        } else {
+          text = await file.text();
+        }
         const res = await fetch(`/api/projects/${project.id}/files`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, content: text }),
+          body: JSON.stringify({ filename, content: text }),
         });
         const data = (await res.json()) as {
           file?: ProjectFileItem;
@@ -87,8 +99,12 @@ export function ProjectModal({
         } else {
           setFiles((prev) => [data.file!, ...prev]);
         }
-      } catch {
-        setError(`${file.name} の読み込みに失敗しました。`);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : `${file.name} の読み込みに失敗しました。`
+        );
       }
     }
     e.target.value = "";
@@ -228,7 +244,7 @@ export function ProjectModal({
                     <input
                       type="file"
                       multiple
-                      accept=".txt,.md,.csv,.json,.ts,.tsx,.js,.jsx,.py,.go,.rs,.yaml,.yml,.xml,.html,.css,.sql,.sh"
+                      accept=".pdf,application/pdf,.txt,.md,.csv,.tsv,.json,.ts,.tsx,.js,.jsx,.py,.go,.rs,.yaml,.yml,.xml,.html,.css,.sql,.sh,.tex,.bib"
                       onChange={handleUploadFiles}
                       className="hidden"
                     />

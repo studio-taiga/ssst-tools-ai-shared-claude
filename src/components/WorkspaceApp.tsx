@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CLAUDE_MODELS, RESPONSE_STYLES } from "@/lib/models";
+import { extractTextFromPdf } from "@/lib/pdf-extract";
 import {
   ConversationItem,
   MessageAttachment,
@@ -83,6 +84,7 @@ export function WorkspaceApp({
   const [draftProjectId, setDraftProjectId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [extractingFiles, setExtractingFiles] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
@@ -295,66 +297,87 @@ export function WorkspaceApp({
     const files = e.target.files;
     if (!files?.length) return;
     setChatError(null);
-    for (const file of Array.from(files)) {
-      if (file.type.startsWith("image/")) {
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const res = String(reader.result ?? "");
-            resolve(res.split(",")[1] ?? "");
-          };
-          reader.readAsDataURL(file);
-        });
-        setAttachments((prev) => [
-          ...prev,
-          {
-            name: file.name,
-            mimeType: file.type,
-            kind: "image",
-            data: base64,
-          },
-        ]);
-      } else if (
-        file.type === "application/pdf" ||
-        file.name.toLowerCase().endsWith(".pdf")
-      ) {
-        if (file.size > 680 * 1024) {
-          setChatError(
-            `${file.name}: PDFファイルは Firestore 保存制限のため 680KB 以内にしてください（テキスト抽出済みの .txt / .md であれば 850KB まで添付可能です）。`
-          );
-          continue;
+    setExtractingFiles(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith("image/")) {
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const res = String(reader.result ?? "");
+              resolve(res.split(",")[1] ?? "");
+            };
+            reader.readAsDataURL(file);
+          });
+          setAttachments((prev) => [
+            ...prev,
+            {
+              name: file.name,
+              mimeType: file.type,
+              kind: "image",
+              data: base64,
+            },
+          ]);
+        } else if (
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf")
+        ) {
+          try {
+            const { text, pageCount } = await extractTextFromPdf(file);
+            setAttachments((prev) => [
+              ...prev,
+              {
+                name: `${file.name} (${pageCount}p)`,
+                mimeType: "text/plain",
+                kind: "text",
+                data: text.slice(0, 850_000),
+              },
+            ]);
+          } catch (err) {
+            // スキャンPDF等の場合は、APIモード向けに680KB以内ならバイナリPDFへフォールバック
+            if (file.size <= 680 * 1024 && effectiveConn?.type === "anthropic_api") {
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const res = String(reader.result ?? "");
+                  resolve(res.split(",")[1] ?? "");
+                };
+                reader.readAsDataURL(file);
+              });
+              setAttachments((prev) => [
+                ...prev,
+                {
+                  name: file.name,
+                  mimeType: "application/pdf",
+                  kind: "pdf",
+                  data: base64,
+                },
+              ]);
+            } else {
+              setChatError(
+                err instanceof Error
+                  ? err.message
+                  : `${file.name} のPDFテキスト抽出に失敗しました。`
+              );
+            }
+          }
+        } else {
+          const text = await file.text();
+          setAttachments((prev) => [
+            ...prev,
+            {
+              name: file.name,
+              mimeType: file.type || "text/plain",
+              kind: "text",
+              data: text.slice(0, 850_000),
+            },
+          ]);
         }
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const res = String(reader.result ?? "");
-            resolve(res.split(",")[1] ?? "");
-          };
-          reader.readAsDataURL(file);
-        });
-        setAttachments((prev) => [
-          ...prev,
-          {
-            name: file.name,
-            mimeType: "application/pdf",
-            kind: "pdf",
-            data: base64,
-          },
-        ]);
-      } else {
-        const text = await file.text();
-        setAttachments((prev) => [
-          ...prev,
-          {
-            name: file.name,
-            mimeType: file.type || "text/plain",
-            kind: "text",
-            data: text.slice(0, 850_000),
-          },
-        ]);
       }
+    } finally {
+      setExtractingFiles(false);
+      e.target.value = "";
     }
-    e.target.value = "";
   };
 
   const sendStreamRequest = async (opts: {
@@ -1506,8 +1529,12 @@ export function WorkspaceApp({
                   title="画像・PDF・テキストファイルを添付"
                 >
                   <Paperclip className="w-4 h-4" />
-                  <span className="hidden sm:inline">添付 (PDF可)</span>
-                  <span className="sm:hidden">添付</span>
+                  <span className="hidden sm:inline">
+                    {extractingFiles ? "PDF読込中..." : "添付 (PDF可)"}
+                  </span>
+                  <span className="sm:hidden">
+                    {extractingFiles ? "読込中..." : "添付"}
+                  </span>
                   <input
                     type="file"
                     multiple
