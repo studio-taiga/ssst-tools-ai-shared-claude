@@ -49,33 +49,51 @@ export async function GET(
 
   const baseUrl = conn.base_url?.trim();
   const collected: Array<{ id: string; displayName: string }> = [];
+  const seen = new Set<string>();
 
   try {
     if (baseUrl) {
-      // OpenRouter / 互換エンドポイントは /v1/models で全件を返すことが多いため直接取得
+      // OpenRouter 等では anthropic-version ヘッダーを付けない方が全件を一度に返す
       const normalized = baseUrl.replace(/\/+$/, "");
-      const endpoint = normalized.endsWith("/v1")
+      const baseEndpoint = normalized.endsWith("/v1")
         ? `${normalized}/models`
         : `${normalized}/v1/models`;
 
-      const res = await fetch(endpoint, {
-        headers: {
-          "x-api-key": apiKey,
-          Authorization: `Bearer ${apiKey}`,
-          "anthropic-version": "2023-06-01",
-        },
-      });
+      let afterId: string | null = null;
+      for (let page = 0; page < 10; page++) {
+        const url = afterId
+          ? `${baseEndpoint}?limit=1000&after_id=${encodeURIComponent(afterId)}`
+          : baseEndpoint;
 
-      if (res.ok) {
-        const json = (await res.json()) as { data?: RawModelEntry[] };
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "x-api-key": apiKey,
+          },
+        });
+
+        if (!res.ok) break;
+        const json = (await res.json()) as {
+          data?: RawModelEntry[];
+          has_more?: boolean;
+          last_id?: string;
+        };
+
         if (Array.isArray(json.data)) {
           for (const m of json.data) {
-            if (!m?.id) continue;
+            if (!m?.id || seen.has(m.id)) continue;
+            seen.add(m.id);
             collected.push({
               id: m.id,
               displayName: m.display_name || m.name || m.id,
             });
           }
+        }
+
+        if (json.has_more && json.last_id) {
+          afterId = json.last_id;
+        } else {
+          break;
         }
       }
     }
@@ -85,8 +103,9 @@ export async function GET(
         apiKey,
         baseURL: baseUrl || undefined,
       });
-      const list = await client.models.list({ limit: 1000 });
-      for (const m of list.data) {
+      for await (const m of client.models.list({ limit: 100 })) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
         collected.push({
           id: m.id,
           displayName: m.display_name || m.id,
