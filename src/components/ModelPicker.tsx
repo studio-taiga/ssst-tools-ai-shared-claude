@@ -78,16 +78,17 @@ export function ModelPicker({
         seen.add(rm.id);
         list.push(rm);
       }
-    }
-
-    for (const m of CLAUDE_MODELS) {
-      if (seen.has(m.id)) continue;
-      seen.add(m.id);
-      list.push({
-        id: m.id,
-        displayName: m.label,
-        pricing: getFallbackPricing(m.id),
-      });
+    } else {
+      // 接続先からモデル一覧を取得できない場合（CLIモード等）のみ標準Claudeモデルを表示
+      for (const m of CLAUDE_MODELS) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        list.push({
+          id: m.id,
+          displayName: m.label,
+          pricing: getFallbackPricing(m.id),
+        });
+      }
     }
 
     return list;
