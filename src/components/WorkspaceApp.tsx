@@ -85,6 +85,7 @@ export function WorkspaceApp({
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [extractingFiles, setExtractingFiles] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [streamingThinking, setStreamingThinking] = useState("");
@@ -293,13 +294,13 @@ export function WorkspaceApp({
     }
   };
 
-  const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files?.length) return;
+  const processAttachedFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
     setChatError(null);
     setExtractingFiles(true);
     try {
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         if (file.type.startsWith("image/")) {
           const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
@@ -376,8 +377,13 @@ export function WorkspaceApp({
       }
     } finally {
       setExtractingFiles(false);
-      e.target.value = "";
     }
+  };
+
+  const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    await processAttachedFiles(e.target.files);
+    e.target.value = "";
   };
 
   const sendStreamRequest = async (opts: {
@@ -1019,7 +1025,40 @@ export function WorkspaceApp({
       </aside>
 
       {/* Main chat area */}
-      <main className="flex-1 flex flex-col min-w-0 h-full">
+      <main
+        className="relative flex-1 flex flex-col min-w-0 h-full"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.types.includes("Files")) {
+            setIsDraggingOver(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDraggingOver(false);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDraggingOver(false);
+          if (e.dataTransfer.files?.length) {
+            void processAttachedFiles(e.dataTransfer.files);
+          }
+        }}
+      >
+        {isDraggingOver && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#191817]/85 border-2 border-dashed border-[#d97757] m-3 rounded-2xl pointer-events-none">
+            <div className="text-center space-y-2">
+              <Paperclip className="w-8 h-8 text-[#d97757] mx-auto" />
+              <div className="text-sm font-semibold text-[#faf9f5]">
+                ファイルをドロップして添付
+              </div>
+              <div className="text-xs text-[#9e998e]">
+                論文 PDF・画像・実験データ (CSV / TXT / JSON など) に対応
+              </div>
+            </div>
+          </div>
+        )}
         {/* Top bar */}
         <header className="shrink-0 border-b border-[#2b2824] bg-[#191817] px-3 sm:px-4 py-2 sm:py-0 sm:h-14 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">

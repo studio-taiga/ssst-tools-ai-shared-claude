@@ -28,6 +28,7 @@ export function ProjectModal({
   const [newFileContent, setNewFileContent] = useState("");
   const [showAddText, setShowAddText] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,10 +69,12 @@ export function ProjectModal({
     }
   };
 
-  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!project || !e.target.files?.length) return;
+  const processKnowledgeFiles = async (fileList: FileList | File[]) => {
+    if (!project) return;
+    const targetFiles = Array.from(fileList);
+    if (targetFiles.length === 0) return;
     setError(null);
-    for (const file of Array.from(e.target.files)) {
+    for (const file of targetFiles) {
       try {
         let filename = file.name;
         let text = "";
@@ -107,6 +110,11 @@ export function ProjectModal({
         );
       }
     }
+  };
+
+  const handleUploadFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    await processKnowledgeFiles(e.target.files);
     e.target.value = "";
   };
 
@@ -219,7 +227,29 @@ export function ProjectModal({
           </form>
 
           {project ? (
-            <div className="pt-4 border-t border-[#302d29] space-y-3">
+            <div
+              className={`pt-4 border-t border-[#302d29] space-y-3 rounded-xl transition-colors ${
+                isDraggingOver ? "bg-[#d97757]/10 ring-2 ring-[#d97757] p-3" : ""
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.types.includes("Files")) {
+                  setIsDraggingOver(true);
+                }
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setIsDraggingOver(false);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingOver(false);
+                if (e.dataTransfer.files?.length) {
+                  void processKnowledgeFiles(e.dataTransfer.files);
+                }
+              }}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-[#faf9f5]">
