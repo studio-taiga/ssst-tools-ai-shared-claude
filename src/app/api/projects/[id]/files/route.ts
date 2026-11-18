@@ -4,7 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { COL, nowIso, ProjectFileRow, ProjectRow } from "@/lib/db";
 import { getFirestoreDb } from "@/lib/firebase";
 
-const MAX_FILE_BYTES = 512 * 1024;
+// Firestore document max size is 1 MiB; keep single knowledge file within 900 KB
+const MAX_FILE_BYTES = 900 * 1024;
 
 export async function POST(
   req: NextRequest,

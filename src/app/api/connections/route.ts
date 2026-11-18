@@ -13,6 +13,7 @@ export interface PublicConnection {
   hasOauthToken: boolean;
   baseUrl: string | null;
   defaultModelOverride: string | null;
+  maxTokens: number | null;
   cliConfigDir: string | null;
   isActive: boolean;
   isDefault: boolean;
@@ -30,6 +31,7 @@ export function toPublicConnection(row: ClaudeConnectionRow): PublicConnection {
     hasOauthToken: Boolean(row.oauth_token_encrypted),
     baseUrl: row.base_url ?? null,
     defaultModelOverride: row.default_model_override ?? null,
+    maxTokens: row.max_tokens ?? null,
     cliConfigDir: row.cli_config_dir,
     isActive: row.is_active,
     isDefault: row.is_default,

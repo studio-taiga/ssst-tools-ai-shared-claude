@@ -39,6 +39,7 @@ export interface PublicConnection {
   hasOauthToken: boolean;
   baseUrl: string | null;
   defaultModelOverride: string | null;
+  maxTokens: number | null;
   cliConfigDir: string | null;
   isActive: boolean;
   isDefault: boolean;

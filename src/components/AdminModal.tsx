@@ -81,6 +81,7 @@ export function AdminModal({
   const [connOauthToken, setConnOauthToken] = useState("");
   const [connBaseUrl, setConnBaseUrl] = useState("");
   const [connModelOverride, setConnModelOverride] = useState("");
+  const [connMaxTokens, setConnMaxTokens] = useState("");
   const [connCliDir, setConnCliDir] = useState("");
   const [showConnAdvanced, setShowConnAdvanced] = useState(false);
   const [connDefault, setConnDefault] = useState(false);
@@ -108,6 +109,7 @@ export function AdminModal({
   const [editConnSecret, setEditConnSecret] = useState("");
   const [editConnBaseUrl, setEditConnBaseUrl] = useState("");
   const [editConnModelOverride, setEditConnModelOverride] = useState("");
+  const [editConnMaxTokens, setEditConnMaxTokens] = useState("");
   const [editConnCliDir, setEditConnCliDir] = useState("");
 
   const [testResults, setTestResults] = useState<
@@ -354,16 +356,24 @@ export function AdminModal({
     setEditConnSecret("");
     setEditConnBaseUrl(c.baseUrl ?? "");
     setEditConnModelOverride(c.defaultModelOverride ?? "");
+    setEditConnMaxTokens(c.maxTokens !== null ? String(c.maxTokens) : "");
     setEditConnCliDir(c.cliConfigDir ?? "");
   };
 
   const handleSaveConnEdit = async (c: PublicConnection) => {
     setError(null);
+    const maxTokNum = editConnMaxTokens.trim()
+      ? Number.parseInt(editConnMaxTokens.trim(), 10)
+      : null;
     const payload: Record<string, unknown> = {
       name: editConnName,
       isActive: editConnIsActive,
       baseUrl: editConnBaseUrl.trim() || null,
       defaultModelOverride: editConnModelOverride.trim() || null,
+      maxTokens:
+        maxTokNum !== null && !Number.isNaN(maxTokNum) && maxTokNum > 0
+          ? maxTokNum
+          : null,
     };
     if (isSystemAdmin) {
       payload.scope = editConnScope;
@@ -449,6 +459,9 @@ export function AdminModal({
   const handleCreateConnection = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const maxTokNum = connMaxTokens.trim()
+      ? Number.parseInt(connMaxTokens.trim(), 10)
+      : null;
     const res = await fetch("/api/admin/connections", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -466,6 +479,10 @@ export function AdminModal({
         oauthToken: connType === "claude_cli" ? connOauthToken : undefined,
         baseUrl: connBaseUrl.trim() || undefined,
         defaultModelOverride: connModelOverride.trim() || undefined,
+        maxTokens:
+          maxTokNum !== null && !Number.isNaN(maxTokNum) && maxTokNum > 0
+            ? maxTokNum
+            : undefined,
         cliConfigDir: connType === "claude_cli" ? connCliDir : undefined,
         isDefault: isSystemAdmin ? connDefault : false,
       }),
@@ -480,6 +497,7 @@ export function AdminModal({
     setConnOauthToken("");
     setConnBaseUrl("");
     setConnModelOverride("");
+    setConnMaxTokens("");
     setConnCliDir("");
     setConnDefault(false);
     await loadData();
@@ -1216,6 +1234,19 @@ export function AdminModal({
                           className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4]"
                         />
                       </div>
+                      <div>
+                        <label className="block text-[10px] text-[#858077] mb-1">
+                          最大出力トークン max_tokens（空=8192）
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={connMaxTokens}
+                          onChange={(e) => setConnMaxTokens(e.target.value)}
+                          placeholder="8192"
+                          className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4]"
+                        />
+                      </div>
                       {connType === "claude_cli" && (
                         <div className="sm:col-span-2">
                           <label className="block text-[10px] text-[#858077] mb-1">
@@ -1419,6 +1450,21 @@ export function AdminModal({
                                 setEditConnModelOverride(e.target.value)
                               }
                               placeholder="例: anthropic/claude-sonnet-4.5"
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              最大出力トークン max_tokens（空=8192）
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={editConnMaxTokens}
+                              onChange={(e) =>
+                                setEditConnMaxTokens(e.target.value)
+                              }
+                              placeholder="8192"
                               className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
                             />
                           </div>

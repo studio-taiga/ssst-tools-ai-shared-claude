@@ -45,6 +45,7 @@ export async function PATCH(
     oauthToken?: string;
     baseUrl?: string | null;
     defaultModelOverride?: string | null;
+    maxTokens?: number | null;
     cliConfigDir?: string | null;
     isActive?: boolean;
     isDefault?: boolean;
@@ -98,6 +99,12 @@ export async function PATCH(
       body.defaultModelOverride !== undefined
         ? body.defaultModelOverride?.trim() || null
         : existing.default_model_override ?? null,
+    max_tokens:
+      body.maxTokens !== undefined
+        ? typeof body.maxTokens === "number" && body.maxTokens > 0
+          ? body.maxTokens
+          : null
+        : existing.max_tokens ?? null,
     cli_config_dir:
       body.cliConfigDir !== undefined
         ? body.cliConfigDir?.trim() || null

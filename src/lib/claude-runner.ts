@@ -196,10 +196,15 @@ async function runAnthropicApi(params: {
   const client = new Anthropic({ apiKey, baseURL });
   const messages = buildAnthropicMessages(params.history);
 
+  const maxTokens =
+    params.connection.max_tokens && params.connection.max_tokens > 0
+      ? params.connection.max_tokens
+      : 8192;
+
   const stream = client.messages.stream(
     {
       model: params.model,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       system: params.systemPrompt || undefined,
       messages,
     },

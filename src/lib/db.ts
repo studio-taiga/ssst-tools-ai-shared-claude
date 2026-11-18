@@ -26,6 +26,7 @@ export interface ClaudeConnectionRow {
   oauth_token_encrypted: string | null;
   base_url: string | null;
   default_model_override: string | null;
+  max_tokens: number | null;
   cli_config_dir: string | null;
   is_active: boolean;
   is_default: boolean;

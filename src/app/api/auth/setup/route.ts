@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     oauthToken?: string;
     baseUrl?: string;
     defaultModelOverride?: string;
+    maxTokens?: number | null;
     cliConfigDir?: string;
   };
 
@@ -107,6 +108,10 @@ export async function POST(req: NextRequest) {
       oauth_token_encrypted: encryptedOauthToken,
       base_url: body.baseUrl?.trim() || null,
       default_model_override: body.defaultModelOverride?.trim() || null,
+      max_tokens:
+        typeof body.maxTokens === "number" && body.maxTokens > 0
+          ? body.maxTokens
+          : null,
       cli_config_dir: cliDir,
       is_active: true,
       is_default: true,
