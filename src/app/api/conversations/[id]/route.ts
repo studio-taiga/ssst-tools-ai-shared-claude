@@ -81,6 +81,7 @@ export async function PATCH(
     model?: string;
     projectId?: string | null;
     connectionId?: string | null;
+    isPinned?: boolean;
   };
 
   if (body.projectId) {
@@ -116,6 +117,10 @@ export async function PATCH(
       body.connectionId !== undefined
         ? body.connectionId
         : existing.connection_id,
+    is_pinned:
+      typeof body.isPinned === "boolean"
+        ? body.isPinned
+        : Boolean(existing.is_pinned),
     updated_at: nowIso(),
   });
 

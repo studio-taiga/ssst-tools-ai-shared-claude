@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Paperclip,
   Pencil,
+  Pin,
   Plus,
   RotateCcw,
   Search,
@@ -645,6 +646,33 @@ export function WorkspaceApp({
     }
   };
 
+  const handleTogglePin = async (
+    e: React.MouseEvent,
+    conv: ConversationItem
+  ) => {
+    e.stopPropagation();
+    const nextPinned = !conv.is_pinned;
+    const res = await fetch(`/api/conversations/${conv.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPinned: nextPinned }),
+    });
+    if (res.ok) {
+      setConversations((prev) =>
+        prev
+          .map((c) =>
+            c.id === conv.id ? { ...c, is_pinned: nextPinned } : c
+          )
+          .sort((a, b) => {
+            if (Boolean(a.is_pinned) !== Boolean(b.is_pinned)) {
+              return a.is_pinned ? -1 : 1;
+            }
+            return b.updated_at.localeCompare(a.updated_at);
+          })
+      );
+    }
+  };
+
   const handleExportMarkdown = () => {
     if (messages.length === 0) return;
     const activeConv = conversations.find((c) => c.id === activeConvId);
@@ -836,7 +864,11 @@ export function WorkspaceApp({
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[#858077]" />
+                          {c.is_pinned ? (
+                            <Pin className="w-3.5 h-3.5 shrink-0 text-[#d97757]" />
+                          ) : (
+                            <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[#858077]" />
+                          )}
                           {isRenaming ? (
                             <input
                               type="text"
@@ -867,6 +899,18 @@ export function WorkspaceApp({
                         </div>
                         {!isRenaming && (
                           <div className="flex items-center opacity-0 group-hover:opacity-100 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => void handleTogglePin(e, c)}
+                              className={`p-1 cursor-pointer ${
+                                c.is_pinned
+                                  ? "text-[#d97757] hover:text-[#f3c6b6]"
+                                  : "text-[#858077] hover:text-[#eceae4]"
+                              }`}
+                              title={c.is_pinned ? "ピン留めを解除" : "ピン留め"}
+                            >
+                              <Pin className="w-3 h-3" />
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => {

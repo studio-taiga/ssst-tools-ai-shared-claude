@@ -77,6 +77,7 @@ export interface ConversationRow {
   connection_id: string | null;
   title: string;
   model: string;
+  is_pinned?: boolean;
   created_at: string;
   updated_at: string;
 }
