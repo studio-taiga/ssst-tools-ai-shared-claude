@@ -706,7 +706,7 @@ export function WorkspaceApp({
   const activeProject = projects.find((p) => p.id === draftProjectId) ?? null;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#191817] text-[#eceae4]">
+    <div className="flex h-screen supports-[height:100dvh]:h-dvh w-full overflow-hidden bg-[#191817] text-[#eceae4]">
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -801,7 +801,7 @@ export function WorkspaceApp({
                     <button
                       type="button"
                       onClick={() => setEditingProject(p)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-[#858077] hover:text-[#eceae4] cursor-pointer"
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 text-[#858077] hover:text-[#eceae4] cursor-pointer"
                       title="プロジェクト設定・ナレッジ"
                     >
                       <Settings className="w-3 h-3" />
@@ -898,7 +898,7 @@ export function WorkspaceApp({
                           )}
                         </div>
                         {!isRenaming && (
-                          <div className="flex items-center opacity-0 group-hover:opacity-100 shrink-0">
+                          <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 shrink-0">
                             <button
                               type="button"
                               onClick={(e) => void handleTogglePin(e, c)}
@@ -998,12 +998,13 @@ export function WorkspaceApp({
       {/* Main chat area */}
       <main className="flex-1 flex flex-col min-w-0 h-full">
         {/* Top bar */}
-        <header className="h-14 shrink-0 border-b border-[#2b2824] bg-[#191817] px-4 flex items-center justify-between gap-2">
+        <header className="shrink-0 border-b border-[#2b2824] bg-[#191817] px-3 sm:px-4 py-2 sm:py-0 sm:h-14 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="md:hidden p-1.5 text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+              className="md:hidden p-1.5 -ml-1 text-[#b7b3aa] hover:text-[#eceae4] shrink-0 cursor-pointer"
+              aria-label="メニューを開く"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -1018,26 +1019,26 @@ export function WorkspaceApp({
                   }
                   setCustomModelMode(false);
                 }}
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 flex-1 min-w-0"
               >
                 <input
                   type="text"
                   autoFocus
                   value={customModelDraft}
                   onChange={(e) => setCustomModelDraft(e.target.value)}
-                  placeholder="モデルIDを入力 (例: openrouter/free)"
-                  className="rounded-lg bg-[#22201e] border border-[#d97757] px-2.5 py-1 text-xs text-[#eceae4] focus:outline-none w-56"
+                  placeholder="モデルID (例: openrouter/free)"
+                  className="rounded-lg bg-[#22201e] border border-[#d97757] px-2.5 py-1 text-base sm:text-xs text-[#eceae4] focus:outline-none flex-1 min-w-0 sm:w-52"
                 />
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#d97757] px-2 py-1 text-xs text-white cursor-pointer"
+                  className="rounded-lg bg-[#d97757] px-2.5 py-1.5 sm:py-1 text-xs text-white shrink-0 cursor-pointer"
                 >
                   決定
                 </button>
                 <button
                   type="button"
                   onClick={() => setCustomModelMode(false)}
-                  className="rounded-lg border border-[#35322e] px-2 py-1 text-xs text-[#9e998e] cursor-pointer"
+                  className="rounded-lg border border-[#35322e] px-2 py-1.5 sm:py-1 text-xs text-[#9e998e] shrink-0 cursor-pointer"
                 >
                   戻る
                 </button>
@@ -1053,7 +1054,7 @@ export function WorkspaceApp({
                   }
                   void handleUpdateConversationMeta({ model: e.target.value });
                 }}
-                className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[220px]"
+                className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] flex-1 sm:flex-initial min-w-0 max-w-full sm:max-w-[220px] truncate"
                 title="モデル選択"
               >
                 {(() => {
@@ -1128,7 +1129,7 @@ export function WorkspaceApp({
                   connectionId: e.target.value || null,
                 })
               }
-              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[200px]"
+              className="hidden sm:block rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[190px]"
               title="Claude接続先（API / プラン契約）"
             >
               <option value="">接続先: 標準</option>
@@ -1141,7 +1142,25 @@ export function WorkspaceApp({
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <select
+              value={selectedConnectionId}
+              onChange={(e) =>
+                handleUpdateConversationMeta({
+                  connectionId: e.target.value || null,
+                })
+              }
+              className="sm:hidden rounded-lg bg-[#22201e] border border-[#35322e] px-2 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] flex-1 min-w-0 truncate"
+              title="Claude接続先（API / プラン契約）"
+            >
+              <option value="">接続先: 標準</option>
+              {connections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.type === "claude_cli" ? "📋 " : "🔑 "}
+                  {c.name}
+                </option>
+              ))}
+            </select>
             <select
               value={draftProjectId ?? ""}
               onChange={(e) =>
@@ -1149,7 +1168,7 @@ export function WorkspaceApp({
                   projectId: e.target.value || null,
                 })
               }
-              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#b7b3aa] focus:outline-none focus:border-[#d97757] max-w-[160px]"
+              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2 sm:px-2.5 py-1.5 text-xs text-[#b7b3aa] focus:outline-none focus:border-[#d97757] flex-1 sm:flex-initial min-w-0 max-w-full sm:max-w-[160px] truncate"
               title="紐づくプロジェクト"
             >
               <option value="">プロジェクトなし</option>
@@ -1163,7 +1182,7 @@ export function WorkspaceApp({
               <button
                 type="button"
                 onClick={handleExportMarkdown}
-                className="p-1.5 rounded-lg border border-[#35322e] bg-[#22201e] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                className="p-1.5 rounded-lg border border-[#35322e] bg-[#22201e] text-[#b7b3aa] hover:text-[#eceae4] shrink-0 cursor-pointer"
                 title="Markdown 形式でエクスポート"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -1228,7 +1247,7 @@ export function WorkspaceApp({
                               setEditingMsgId(m.id);
                               setEditMsgDraft(m.content);
                             }}
-                            className="opacity-0 group-hover:opacity-100 mt-2 p-1.5 text-[#78736a] hover:text-[#eceae4] cursor-pointer"
+                            className="opacity-70 md:opacity-0 md:group-hover:opacity-100 mt-2 p-1.5 text-[#78736a] hover:text-[#eceae4] cursor-pointer"
                             title="メッセージを編集して再送信"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1431,8 +1450,8 @@ export function WorkspaceApp({
         </div>
 
         {/* Composer */}
-        <div className="shrink-0 p-4 border-t border-[#2b2824] bg-[#191817]">
-          <div className="max-w-3xl mx-auto rounded-2xl border border-[#35322e] bg-[#22201e] p-3 focus-within:border-[#d97757]/70 transition-colors">
+        <div className="shrink-0 p-2.5 sm:p-4 border-t border-[#2b2824] bg-[#191817]">
+          <div className="max-w-3xl mx-auto rounded-2xl border border-[#35322e] bg-[#22201e] p-2.5 sm:p-3 focus-within:border-[#d97757]/70 transition-colors">
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2 pb-2 border-b border-[#302d29]">
                 {attachments.map((att, idx) => (
@@ -1472,17 +1491,18 @@ export function WorkspaceApp({
                 }
               }}
               placeholder="Claude にメッセージを送信... (Shift+Enter で改行)"
-              className="w-full resize-none bg-transparent text-sm text-[#eceae4] placeholder-[#78736a] focus:outline-none"
+              className="w-full resize-none bg-transparent text-base sm:text-sm text-[#eceae4] placeholder-[#78736a] focus:outline-none"
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex items-end justify-between gap-2 pt-2">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
                 <label
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[#9e998e] hover:text-[#eceae4] hover:bg-[#2a2825] cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 sm:py-1 text-xs text-[#9e998e] hover:text-[#eceae4] hover:bg-[#2a2825] cursor-pointer"
                   title="画像・PDF・テキストファイルを添付"
                 >
                   <Paperclip className="w-4 h-4" />
-                  <span>添付 (PDF可)</span>
+                  <span className="hidden sm:inline">添付 (PDF可)</span>
+                  <span className="sm:hidden">添付</span>
                   <input
                     type="file"
                     multiple
@@ -1495,7 +1515,7 @@ export function WorkspaceApp({
                 <button
                   type="button"
                   onClick={() => setEnableThinking((v) => !v)}
-                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] border transition-colors cursor-pointer ${
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 sm:py-1 text-[11px] border transition-colors cursor-pointer ${
                     enableThinking
                       ? "bg-[#d97757]/15 border-[#d97757]/50 text-[#f3c6b6]"
                       : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
@@ -1509,7 +1529,7 @@ export function WorkspaceApp({
                 <button
                   type="button"
                   onClick={() => setEnableWebSearch((v) => !v)}
-                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] border transition-colors cursor-pointer ${
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 sm:py-1 text-[11px] border transition-colors cursor-pointer ${
                     enableWebSearch
                       ? "bg-sky-500/15 border-sky-500/40 text-sky-300"
                       : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
@@ -1517,13 +1537,13 @@ export function WorkspaceApp({
                   title="Web 検索連携 (Anthropic API)"
                 >
                   <Globe className="w-3.5 h-3.5" />
-                  <span>Web検索</span>
+                  <span>Web</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setEnableArtifacts((v) => !v)}
-                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] border transition-colors cursor-pointer ${
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1.5 sm:py-1 text-[11px] border transition-colors cursor-pointer ${
                     enableArtifacts
                       ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
                       : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
@@ -1531,43 +1551,45 @@ export function WorkspaceApp({
                   title="Artifacts プレビュー生成"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Artifacts</span>
+                  <span>Artifact</span>
                 </button>
 
                 <select
                   value={responseStyle}
                   onChange={(e) => setResponseStyle(e.target.value)}
-                  className="rounded-lg bg-[#191817] border border-[#302d29] px-2 py-1 text-[11px] text-[#b7b3aa] focus:outline-none focus:border-[#d97757]"
+                  className="rounded-lg bg-[#191817] border border-[#302d29] px-2 py-1.5 sm:py-1 text-[11px] text-[#b7b3aa] focus:outline-none focus:border-[#d97757]"
                   title="回答スタイル"
                 >
                   {RESPONSE_STYLES.map((s) => (
                     <option key={s.id} value={s.id}>
-                      スタイル: {s.label}
+                      {s.label}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {isStreaming ? (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/20 border border-red-500/40 hover:bg-red-500/30 px-3 py-1.5 text-xs font-medium text-red-200 cursor-pointer"
-                >
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>停止</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void handleSend()}
-                  disabled={!input.trim() && attachments.length === 0}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#d97757] hover:bg-[#c86747] disabled:opacity-40 px-3.5 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>送信</span>
-                </button>
-              )}
+              <div className="shrink-0">
+                {isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/20 border border-red-500/40 hover:bg-red-500/30 px-3 py-2 sm:py-1.5 text-xs font-medium text-red-200 cursor-pointer"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span>停止</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleSend()}
+                    disabled={!input.trim() && attachments.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#d97757] hover:bg-[#c86747] disabled:opacity-40 px-3.5 py-2 sm:py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>送信</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
