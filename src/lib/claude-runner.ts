@@ -12,10 +12,11 @@ import {
   ProjectRow,
   UserRow,
 } from "./db";
-import { resolveCliModel } from "./models";
+import { resolveCliModel, RESPONSE_STYLES } from "./models";
 
 export interface StreamCallbacks {
   onDelta: (text: string) => void;
+  onThinkingDelta?: (text: string) => void;
   onComplete: (usage: { inputTokens: number; outputTokens: number }) => void;
   onError: (error: Error) => void;
 }
@@ -24,6 +25,8 @@ export function buildSystemPrompt(params: {
   user: UserRow;
   project: ProjectRow | null;
   projectFiles: ProjectFileRow[];
+  responseStyle?: string;
+  enableArtifacts?: boolean;
 }): string {
   const sections: string[] = [];
 
@@ -51,6 +54,21 @@ export function buildSystemPrompt(params: {
         `<project_knowledge project="${params.project.name}">\n以下はこのプロジェクトに紐づく参照ナレッジです。回答時に適宜参照してください。\n\n${filesText}\n</project_knowledge>`
       );
     }
+  }
+
+  if (params.responseStyle) {
+    const foundStyle = RESPONSE_STYLES.find((s) => s.id === params.responseStyle);
+    if (foundStyle && foundStyle.instruction) {
+      sections.push(
+        `<response_style name="${foundStyle.label}">\n${foundStyle.instruction}\n</response_style>`
+      );
+    }
+  }
+
+  if (params.enableArtifacts) {
+    sections.push(
+      `<artifacts_guide>\n自己完結したHTMLアプリケーション、SVGイラスト、Mermaid図表、または独立した長文ドキュメントを生成する際は、必要に応じて <antArtifact title="タイトル" type="text/html|image/svg+xml|application/vnd.ant.mermaid|text/markdown">内容</antArtifact> タグで囲んで出力すると、ユーザーの画面右側の専用ペインでライブプレビューされます。\n</artifacts_guide>`
+    );
   }
 
   return sections.join("\n\n");
@@ -100,6 +118,16 @@ function buildAnthropicMessages(
             data: att.data,
           },
         });
+      } else if (att.kind === "pdf") {
+        blocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: att.data,
+          },
+          title: att.name,
+        } as unknown as Anthropic.ContentBlockParam);
       } else {
         blocks.push({
           type: "text",
@@ -179,6 +207,8 @@ async function runAnthropicApi(params: {
   model: string;
   systemPrompt: string;
   history: MessageRow[];
+  enableThinking?: boolean;
+  enableWebSearch?: boolean;
   callbacks: StreamCallbacks;
   signal?: AbortSignal;
 }): Promise<void> {
@@ -196,20 +226,62 @@ async function runAnthropicApi(params: {
   const client = new Anthropic({ apiKey, baseURL });
   const messages = buildAnthropicMessages(params.history);
 
-  const maxTokens =
+  let maxTokens =
     params.connection.max_tokens && params.connection.max_tokens > 0
       ? params.connection.max_tokens
       : 8192;
 
+  const isStandardAnthropic = !baseURL;
+  const systemParam: Anthropic.MessageCreateParams["system"] =
+    params.systemPrompt
+      ? isStandardAnthropic && params.systemPrompt.length >= 1024
+        ? [
+            {
+              type: "text",
+              text: params.systemPrompt,
+              cache_control: { type: "ephemeral" },
+            },
+          ]
+        : params.systemPrompt
+      : undefined;
+
+  const requestBody: Record<string, unknown> = {
+    model: params.model,
+    max_tokens: maxTokens,
+    system: systemParam,
+    messages,
+  };
+
+  if (params.enableThinking) {
+    const budget = Math.min(4096, Math.max(1024, Math.floor(maxTokens * 0.4)));
+    if (maxTokens <= budget) {
+      maxTokens = budget + 2048;
+      requestBody.max_tokens = maxTokens;
+    }
+    requestBody.thinking = {
+      type: "enabled",
+      budget_tokens: budget,
+    };
+  }
+
+  if (params.enableWebSearch) {
+    requestBody.tools = [
+      {
+        type: "web_search_20250305",
+        name: "web_search",
+        max_uses: 5,
+      },
+    ];
+  }
+
   const stream = client.messages.stream(
-    {
-      model: params.model,
-      max_tokens: maxTokens,
-      system: params.systemPrompt || undefined,
-      messages,
-    },
+    requestBody as unknown as Anthropic.MessageStreamParams,
     { signal: params.signal }
   );
+
+  stream.on("thinking", (thinkingDelta) => {
+    params.callbacks.onThinkingDelta?.(thinkingDelta);
+  });
 
   stream.on("text", (textDelta) => {
     params.callbacks.onDelta(textDelta);
@@ -416,6 +488,8 @@ export async function streamClaudeResponse(params: {
   model: string;
   systemPrompt: string;
   history: MessageRow[];
+  enableThinking?: boolean;
+  enableWebSearch?: boolean;
   callbacks: StreamCallbacks;
   signal?: AbortSignal;
 }): Promise<void> {

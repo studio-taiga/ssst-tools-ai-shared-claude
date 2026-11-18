@@ -121,12 +121,18 @@ export async function POST(
     attachments?: MessageAttachment[];
     model?: string;
     connectionId?: string | null;
+    enableThinking?: boolean;
+    enableWebSearch?: boolean;
+    enableArtifacts?: boolean;
+    responseStyle?: string;
+    truncateFromMessageId?: string;
+    regenerateOnly?: boolean;
   };
 
   const content = (body.content ?? "").trim();
   const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
-  if (!content && attachments.length === 0) {
+  if (!body.regenerateOnly && !content && attachments.length === 0) {
     return NextResponse.json(
       { error: "メッセージを入力してください。" },
       { status: 400 }
@@ -155,24 +161,45 @@ export async function POST(
   }
 
   const now = nowIso();
-  const userMsgId = crypto.randomUUID();
-  const attachmentsJson =
-    attachments.length > 0 ? JSON.stringify(attachments) : null;
 
-  const userMsgDoc: MessageRow = {
-    id: userMsgId,
-    conversation_id: id,
-    user_id: user.id,
-    role: "user",
-    content,
-    attachments_json: attachmentsJson,
-    input_tokens: 0,
-    output_tokens: 0,
-    model: null,
-    connection_type: null,
-    created_at: now,
-  };
-  await db.collection(COL.MESSAGES).doc(userMsgId).set(userMsgDoc);
+  if (body.truncateFromMessageId) {
+    const existingSnap = await db
+      .collection(COL.MESSAGES)
+      .where("conversation_id", "==", id)
+      .orderBy("created_at", "asc")
+      .get();
+    const docs = existingSnap.docs;
+    const idx = docs.findIndex((d) => d.id === body.truncateFromMessageId);
+    if (idx !== -1) {
+      const batch = db.batch();
+      for (let i = idx; i < docs.length; i++) {
+        batch.delete(docs[i].ref);
+      }
+      await batch.commit();
+    }
+  }
+
+  let userMsgId = body.truncateFromMessageId || crypto.randomUUID();
+  if (!body.regenerateOnly) {
+    userMsgId = crypto.randomUUID();
+    const attachmentsJson =
+      attachments.length > 0 ? JSON.stringify(attachments) : null;
+
+    const userMsgDoc: MessageRow = {
+      id: userMsgId,
+      conversation_id: id,
+      user_id: user.id,
+      role: "user",
+      content,
+      attachments_json: attachmentsJson,
+      input_tokens: 0,
+      output_tokens: 0,
+      model: null,
+      connection_type: null,
+      created_at: now,
+    };
+    await db.collection(COL.MESSAGES).doc(userMsgId).set(userMsgDoc);
+  }
 
   let updatedTitle = conversation.title;
   if (conversation.title === "新しいチャット" && content) {
@@ -221,6 +248,8 @@ export async function POST(
     user,
     project,
     projectFiles,
+    responseStyle: body.responseStyle,
+    enableArtifacts: body.enableArtifacts,
   });
 
   const encoder = new TextEncoder();
@@ -241,14 +270,21 @@ export async function POST(
       });
 
       let fullText = "";
+      let fullThinking = "";
 
       await streamClaudeResponse({
         connection,
         model,
         systemPrompt,
         history,
+        enableThinking: body.enableThinking,
+        enableWebSearch: body.enableWebSearch,
         signal: req.signal,
         callbacks: {
+          onThinkingDelta(text) {
+            fullThinking += text;
+            sendEvent("thinking", { text });
+          },
           onDelta(text) {
             fullText += text;
             sendEvent("delta", { text });
@@ -262,6 +298,7 @@ export async function POST(
               user_id: user.id,
               role: "assistant",
               content: fullText,
+              thinking_content: fullThinking || null,
               attachments_json: null,
               input_tokens: usage.inputTokens,
               output_tokens: usage.outputTokens,

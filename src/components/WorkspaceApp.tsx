@@ -2,13 +2,22 @@
 
 import {
   Bot,
+  Brain,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileText,
   Folder,
   FolderOpen,
+  Globe,
   LogOut,
   Menu,
   MessageSquare,
   Paperclip,
+  Pencil,
   Plus,
+  RotateCcw,
+  Search,
   Send,
   Settings,
   Shield,
@@ -19,7 +28,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CLAUDE_MODELS } from "@/lib/models";
+import { CLAUDE_MODELS, RESPONSE_STYLES } from "@/lib/models";
 import {
   ConversationItem,
   MessageAttachment,
@@ -29,6 +38,11 @@ import {
   PublicUser,
 } from "@/types/app";
 import { AdminModal } from "./AdminModal";
+import {
+  ArtifactItem,
+  ArtifactPanel,
+  extractArtifacts,
+} from "./ArtifactPanel";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { ProfileModal } from "./ProfileModal";
 import { ProjectModal } from "./ProjectModal";
@@ -70,7 +84,27 @@ export function WorkspaceApp({
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
+  const [streamingThinking, setStreamingThinking] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
+
+  // Claude feature toggles
+  const [enableThinking, setEnableThinking] = useState(false);
+  const [enableWebSearch, setEnableWebSearch] = useState(false);
+  const [enableArtifacts, setEnableArtifacts] = useState(true);
+  const [responseStyle, setResponseStyle] = useState("normal");
+  const [activeArtifact, setActiveArtifact] = useState<ArtifactItem | null>(
+    null
+  );
+  const [expandedThinkingIds, setExpandedThinkingIds] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Search, rename & message editing
+  const [searchQuery, setSearchQuery] = useState("");
+  const [renamingConvId, setRenamingConvId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editMsgDraft, setEditMsgDraft] = useState("");
 
   // Modals & UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -259,6 +293,7 @@ export function WorkspaceApp({
   const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
+    setChatError(null);
     for (const file of Array.from(files)) {
       if (file.type.startsWith("image/")) {
         const base64 = await new Promise<string>((resolve) => {
@@ -278,6 +313,33 @@ export function WorkspaceApp({
             data: base64,
           },
         ]);
+      } else if (
+        file.type === "application/pdf" ||
+        file.name.toLowerCase().endsWith(".pdf")
+      ) {
+        if (file.size > 680 * 1024) {
+          setChatError(
+            `${file.name}: PDFファイルは Firestore 保存制限のため 680KB 以内にしてください（テキスト抽出済みの .txt / .md であれば 850KB まで添付可能です）。`
+          );
+          continue;
+        }
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = String(reader.result ?? "");
+            resolve(res.split(",")[1] ?? "");
+          };
+          reader.readAsDataURL(file);
+        });
+        setAttachments((prev) => [
+          ...prev,
+          {
+            name: file.name,
+            mimeType: "application/pdf",
+            kind: "pdf",
+            data: base64,
+          },
+        ]);
       } else {
         const text = await file.text();
         setAttachments((prev) => [
@@ -292,6 +354,169 @@ export function WorkspaceApp({
       }
     }
     e.target.value = "";
+  };
+
+  const sendStreamRequest = async (opts: {
+    targetConvId: string;
+    content: string;
+    attachments: MessageAttachment[];
+    truncateFromMessageId?: string;
+    regenerateOnly?: boolean;
+  }) => {
+    setIsStreaming(true);
+    setStreamingText("");
+    setStreamingThinking("");
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(
+        `/api/conversations/${opts.targetConvId}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: opts.content,
+            attachments: opts.attachments,
+            model: selectedModel,
+            connectionId: selectedConnectionId || null,
+            enableThinking,
+            enableWebSearch,
+            enableArtifacts,
+            responseStyle,
+            truncateFromMessageId: opts.truncateFromMessageId,
+            regenerateOnly: opts.regenerateOnly,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!res.ok || !res.body) {
+        const errData = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setChatError(errData.error || "メッセージ送信に失敗しました。");
+        setIsStreaming(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const acc = {
+        text: "",
+        thinking: "",
+        connType: "",
+        userMsgId: "",
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() ?? "";
+
+        for (const chunk of chunks) {
+          const lines = chunk.split("\n");
+          let eventName = "message";
+          let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              eventName = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              dataStr += line.slice(5).trim();
+            }
+          }
+          if (!dataStr) continue;
+
+          try {
+            const payload = JSON.parse(dataStr) as {
+              text?: string;
+              error?: string;
+              connectionType?: string;
+              userMessageId?: string;
+              assistantMessageId?: string;
+              inputTokens?: number;
+              outputTokens?: number;
+            };
+
+            if (eventName === "meta") {
+              if (payload.connectionType) acc.connType = payload.connectionType;
+              if (payload.userMessageId) acc.userMsgId = payload.userMessageId;
+            } else if (eventName === "thinking" && payload.text) {
+              acc.thinking += payload.text;
+              setStreamingThinking(acc.thinking);
+            } else if (eventName === "delta" && payload.text) {
+              acc.text += payload.text;
+              setStreamingText(acc.text);
+            } else if (eventName === "error") {
+              setChatError(
+                payload.error || "応答生成中にエラーが発生しました。"
+              );
+            } else if (eventName === "done") {
+              const inTok = payload.inputTokens ?? 0;
+              const outTok = payload.outputTokens ?? 0;
+              setMonthlyTokens((prev) => prev + inTok + outTok);
+              const astId =
+                payload.assistantMessageId || `ast-${crypto.randomUUID()}`;
+              const finalUserMsgId = acc.userMsgId;
+              const finalText = acc.text;
+              const finalThinking = acc.thinking;
+              const finalConnType = acc.connType;
+              setMessages((prev) => {
+                const updated = finalUserMsgId
+                  ? prev.map((m) =>
+                      m.id.startsWith("temp-")
+                        ? { ...m, id: finalUserMsgId }
+                        : m
+                    )
+                  : prev;
+                return [
+                  ...updated,
+                  {
+                    id: astId,
+                    conversation_id: opts.targetConvId,
+                    role: "assistant",
+                    content: finalText,
+                    thinking_content: finalThinking || null,
+                    attachments_json: null,
+                    input_tokens: inTok,
+                    output_tokens: outTok,
+                    model: selectedModel,
+                    connection_type: finalConnType || null,
+                    created_at: new Date().toISOString(),
+                  },
+                ];
+              });
+
+              if (enableArtifacts && finalText) {
+                const { artifacts } = extractArtifacts(finalText);
+                if (artifacts.length > 0) {
+                  setActiveArtifact(artifacts[artifacts.length - 1]);
+                }
+              }
+
+              setStreamingText("");
+              setStreamingThinking("");
+            }
+          } catch {
+            // ignore malformed JSON chunk
+          }
+        }
+      }
+
+      void loadConversations(selectedProjectId);
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        setChatError("ストリーミング中に通信エラーが発生しました。");
+      }
+    } finally {
+      setIsStreaming(false);
+      abortRef.current = null;
+    }
   };
 
   const handleSend = async () => {
@@ -329,7 +554,7 @@ export function WorkspaceApp({
     }
 
     const optimisticUserMsg: MessageItem = {
-      id: `temp-${Date.now()}`,
+      id: `temp-${crypto.randomUUID()}`,
       conversation_id: targetConvId,
       role: "user",
       content: trimmed,
@@ -345,114 +570,100 @@ export function WorkspaceApp({
     };
 
     setMessages((prev) => [...prev, optimisticUserMsg]);
-    setIsStreaming(true);
-    setStreamingText("");
+    await sendStreamRequest({
+      targetConvId,
+      content: trimmed,
+      attachments: currentAttachments,
+    });
+  };
 
-    const controller = new AbortController();
-    abortRef.current = controller;
+  const handleEditAndResend = async (msg: MessageItem) => {
+    if (isStreaming || !activeConvId) return;
+    const trimmed = editMsgDraft.trim();
+    if (!trimmed) return;
+    setEditingMsgId(null);
+    setChatError(null);
 
-    try {
-      const res = await fetch(`/api/conversations/${targetConvId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: trimmed,
-          attachments: currentAttachments,
-          model: selectedModel,
-          connectionId: selectedConnectionId || null,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        const errData = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        setChatError(errData.error || "メッセージ送信に失敗しました。");
-        setIsStreaming(false);
-        return;
+    let existingAtts: MessageAttachment[] = [];
+    if (msg.attachments_json) {
+      try {
+        existingAtts = JSON.parse(msg.attachments_json) as MessageAttachment[];
+      } catch {
+        existingAtts = [];
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-      let metaConnType = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() ?? "";
-
-        for (const chunk of chunks) {
-          const lines = chunk.split("\n");
-          let eventName = "message";
-          let dataStr = "";
-          for (const line of lines) {
-            if (line.startsWith("event:")) {
-              eventName = line.slice(6).trim();
-            } else if (line.startsWith("data:")) {
-              dataStr += line.slice(5).trim();
-            }
-          }
-          if (!dataStr) continue;
-
-          try {
-            const payload = JSON.parse(dataStr) as {
-              text?: string;
-              error?: string;
-              connectionType?: string;
-              assistantMessageId?: string;
-              inputTokens?: number;
-              outputTokens?: number;
-            };
-
-            if (eventName === "meta" && payload.connectionType) {
-              metaConnType = payload.connectionType;
-            } else if (eventName === "delta" && payload.text) {
-              accumulated += payload.text;
-              setStreamingText(accumulated);
-            } else if (eventName === "error") {
-              setChatError(payload.error || "応答生成中にエラーが発生しました。");
-            } else if (eventName === "done") {
-              const inTok = payload.inputTokens ?? 0;
-              const outTok = payload.outputTokens ?? 0;
-              setMonthlyTokens((prev) => prev + inTok + outTok);
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: payload.assistantMessageId || `ast-${Date.now()}`,
-                  conversation_id: targetConvId!,
-                  role: "assistant",
-                  content: accumulated,
-                  attachments_json: null,
-                  input_tokens: inTok,
-                  output_tokens: outTok,
-                  model: selectedModel,
-                  connection_type: metaConnType || null,
-                  created_at: new Date().toISOString(),
-                },
-              ]);
-              setStreamingText("");
-            }
-          } catch {
-            // ignore malformed JSON chunk
-          }
-        }
-      }
-
-      void loadConversations(selectedProjectId);
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setChatError("ストリーミング中に通信エラーが発生しました。");
-      }
-    } finally {
-      setIsStreaming(false);
-      abortRef.current = null;
     }
+
+    const idx = messages.findIndex((m) => m.id === msg.id);
+    if (idx === -1) return;
+
+    const updatedUserMsg: MessageItem = {
+      ...msg,
+      id: `temp-${crypto.randomUUID()}`,
+      content: trimmed,
+    };
+    setMessages((prev) => [...prev.slice(0, idx), updatedUserMsg]);
+
+    await sendStreamRequest({
+      targetConvId: activeConvId,
+      content: trimmed,
+      attachments: existingAtts,
+      truncateFromMessageId: msg.id,
+      regenerateOnly: false,
+    });
+  };
+
+  const handleRegenerate = async (assistantMsg: MessageItem) => {
+    if (isStreaming || !activeConvId) return;
+    const idx = messages.findIndex((m) => m.id === assistantMsg.id);
+    if (idx === -1) return;
+
+    setChatError(null);
+    setMessages((prev) => prev.slice(0, idx));
+
+    await sendStreamRequest({
+      targetConvId: activeConvId,
+      content: "",
+      attachments: [],
+      truncateFromMessageId: assistantMsg.id,
+      regenerateOnly: true,
+    });
+  };
+
+  const handleRenameConversation = async (convId: string) => {
+    const trimmed = renameDraft.trim();
+    setRenamingConvId(null);
+    if (!trimmed) return;
+    const res = await fetch(`/api/conversations/${convId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: trimmed }),
+    });
+    if (res.ok) {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: trimmed } : c))
+      );
+    }
+  };
+
+  const handleExportMarkdown = () => {
+    if (messages.length === 0) return;
+    const activeConv = conversations.find((c) => c.id === activeConvId);
+    const title = activeConv?.title || "Shared Claude Chat";
+    const lines = [`# ${title}\n`];
+    for (const m of messages) {
+      lines.push(
+        `\n## ${m.role === "user" ? user.displayName : "Claude"}\n\n${m.content}\n`
+      );
+    }
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/[^\w\u3040-\u30ff\u4e00-\u9faf-]+/g, "_")}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleStop = () => {
@@ -578,48 +789,112 @@ export function WorkspaceApp({
             <div className="px-2 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#858077]">
               チャット履歴
             </div>
-            {conversations.length === 0 ? (
-              <div className="px-2.5 py-3 text-xs text-[#6f6b63]">
-                履歴はまだありません
+            <div className="px-1.5 mb-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-[#78736a] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="履歴を検索..."
+                  className="w-full rounded-lg bg-[#1e1c1a] border border-[#2b2824] pl-8 pr-2.5 py-1 text-xs text-[#eceae4] placeholder-[#6f6b63] focus:outline-none focus:border-[#d97757]"
+                />
               </div>
-            ) : (
-              <div className="space-y-0.5">
-                {conversations.map((c) => {
-                  const isActive = activeConvId === c.id;
-                  return (
-                    <div
-                      key={c.id}
-                      onClick={() => openConversation(c.id)}
-                      className={`group flex items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors cursor-pointer ${
-                        isActive
-                          ? "bg-[#2a2724] text-[#faf9f5]"
-                          : "text-[#b7b3aa] hover:bg-[#1e1c1a] hover:text-[#eceae4]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[#858077]" />
-                        <div className="min-w-0">
-                          <div className="truncate">{c.title}</div>
-                          {c.project_name && (
-                            <div className="text-[10px] text-[#d97757] truncate">
-                              {c.project_name}
+            </div>
+            {(() => {
+              const q = searchQuery.trim().toLowerCase();
+              const filtered = q
+                ? conversations.filter((c) =>
+                    c.title.toLowerCase().includes(q)
+                  )
+                : conversations;
+              if (filtered.length === 0) {
+                return (
+                  <div className="px-2.5 py-3 text-xs text-[#6f6b63]">
+                    {q ? "一致する履歴がありません" : "履歴はまだありません"}
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-0.5">
+                  {filtered.map((c) => {
+                    const isActive = activeConvId === c.id;
+                    const isRenaming = renamingConvId === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          if (!isRenaming) {
+                            setActiveArtifact(null);
+                            void openConversation(c.id);
+                          }
+                        }}
+                        className={`group flex items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors cursor-pointer ${
+                          isActive
+                            ? "bg-[#2a2724] text-[#faf9f5]"
+                            : "text-[#b7b3aa] hover:bg-[#1e1c1a] hover:text-[#eceae4]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[#858077]" />
+                          {isRenaming ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              value={renameDraft}
+                              onChange={(e) => setRenameDraft(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  void handleRenameConversation(c.id);
+                                } else if (e.key === "Escape") {
+                                  setRenamingConvId(null);
+                                }
+                              }}
+                              onBlur={() => void handleRenameConversation(c.id)}
+                              className="w-full rounded bg-[#191817] border border-[#d97757] px-1.5 py-0.5 text-xs text-[#faf9f5] focus:outline-none"
+                            />
+                          ) : (
+                            <div className="min-w-0">
+                              <div className="truncate">{c.title}</div>
+                              {c.project_name && (
+                                <div className="text-[10px] text-[#d97757] truncate">
+                                  {c.project_name}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
+                        {!isRenaming && (
+                          <div className="flex items-center opacity-0 group-hover:opacity-100 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingConvId(c.id);
+                                setRenameDraft(c.title);
+                              }}
+                              className="p-1 text-[#858077] hover:text-[#eceae4] cursor-pointer"
+                              title="名前を変更"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteConversation(e, c.id)}
+                              className="p-1 text-[#858077] hover:text-red-400 cursor-pointer"
+                              title="削除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteConversation(e, c.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-[#858077] hover:text-red-400 shrink-0 cursor-pointer"
-                        title="削除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -808,7 +1083,7 @@ export function WorkspaceApp({
                   projectId: e.target.value || null,
                 })
               }
-              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#b7b3aa] focus:outline-none focus:border-[#d97757] max-w-[180px]"
+              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#b7b3aa] focus:outline-none focus:border-[#d97757] max-w-[160px]"
               title="紐づくプロジェクト"
             >
               <option value="">プロジェクトなし</option>
@@ -818,6 +1093,16 @@ export function WorkspaceApp({
                 </option>
               ))}
             </select>
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={handleExportMarkdown}
+                className="p-1.5 rounded-lg border border-[#35322e] bg-[#22201e] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                title="Markdown 形式でエクスポート"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </header>
 
@@ -867,8 +1152,22 @@ export function WorkspaceApp({
                   }
 
                   if (m.role === "user") {
+                    const isEditingThis = editingMsgId === m.id;
                     return (
-                      <div key={m.id} className="flex justify-end">
+                      <div key={m.id} className="group flex justify-end items-start gap-2">
+                        {!isEditingThis && !isStreaming && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMsgId(m.id);
+                              setEditMsgDraft(m.content);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 mt-2 p-1.5 text-[#78736a] hover:text-[#eceae4] cursor-pointer"
+                            title="メッセージを編集して再送信"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <div className="max-w-[85%] rounded-2xl bg-[#2a2724] border border-[#38342f] px-4 py-3 text-sm text-[#faf9f5] space-y-2">
                           {parsedAtts.length > 0 && (
                             <div className="flex flex-wrap gap-2">
@@ -886,28 +1185,111 @@ export function WorkspaceApp({
                                     key={idx}
                                     className="inline-flex items-center gap-1 rounded bg-[#191817] px-2 py-1 text-xs text-[#b7b3aa]"
                                   >
-                                    📎 {att.name}
+                                    {att.kind === "pdf" ? (
+                                      <FileText className="w-3.5 h-3.5 text-[#d97757]" />
+                                    ) : (
+                                      "📎"
+                                    )}{" "}
+                                    {att.name}
                                   </span>
                                 )
                               )}
                             </div>
                           )}
-                          <div className="whitespace-pre-wrap leading-relaxed">
-                            {m.content}
-                          </div>
+                          {isEditingThis ? (
+                            <div className="space-y-2 min-w-[260px]">
+                              <textarea
+                                rows={3}
+                                value={editMsgDraft}
+                                onChange={(e) => setEditMsgDraft(e.target.value)}
+                                className="w-full rounded-lg bg-[#191817] border border-[#d97757] p-2 text-sm text-[#faf9f5] focus:outline-none"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingMsgId(null)}
+                                  className="px-2.5 py-1 text-xs text-[#b7b3aa] cursor-pointer"
+                                >
+                                  キャンセル
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleEditAndResend(m)}
+                                  className="rounded-lg bg-[#d97757] px-3 py-1 text-xs font-medium text-white cursor-pointer"
+                                >
+                                  保存して再送信
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="whitespace-pre-wrap leading-relaxed">
+                              {m.content}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   }
+
+                  const { cleanText, artifacts } = extractArtifacts(m.content);
+                  const isThinkingOpen = Boolean(expandedThinkingIds[m.id]);
 
                   return (
                     <div key={m.id} className="flex gap-3 items-start">
                       <div className="w-7 h-7 rounded-lg bg-[#d97757]/15 border border-[#d97757]/30 flex items-center justify-center text-[#d97757] shrink-0 mt-0.5">
                         <Bot className="w-4 h-4" />
                       </div>
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <MarkdownRenderer content={m.content} />
-                        <div className="flex items-center gap-2 text-[10px] text-[#78736a]">
+                      <div className="flex-1 min-w-0 space-y-2">
+                        {m.thinking_content && (
+                          <div className="rounded-xl border border-[#302d29] bg-[#1e1c1a] overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedThinkingIds((prev) => ({
+                                  ...prev,
+                                  [m.id]: !prev[m.id],
+                                }))
+                              }
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                            >
+                              <Brain className="w-3.5 h-3.5 text-[#d97757]" />
+                              <span>思考プロセス</span>
+                              {isThinkingOpen ? (
+                                <ChevronDown className="w-3.5 h-3.5 ml-auto" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 ml-auto" />
+                              )}
+                            </button>
+                            {isThinkingOpen && (
+                              <div className="px-3 pb-3 pt-1 text-xs text-[#9e998e] whitespace-pre-wrap border-t border-[#2a2825] leading-relaxed">
+                                {m.thinking_content}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <MarkdownRenderer content={cleanText} />
+
+                        {artifacts.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {artifacts.map((art) => (
+                              <button
+                                key={art.id}
+                                type="button"
+                                onClick={() => setActiveArtifact(art)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-[#d97757]/40 bg-[#d97757]/10 hover:bg-[#d97757]/20 px-3 py-2 text-xs font-medium text-[#f3c6b6] transition-colors cursor-pointer"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-[#d97757]" />
+                                <span>{art.title}</span>
+                                <span className="text-[10px] text-[#b7b3aa]">
+                                  プレビュー
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#78736a]">
                           {m.model && <span>{m.model}</span>}
                           {m.connection_type && (
                             <span>
@@ -923,6 +1305,17 @@ export function WorkspaceApp({
                               {m.output_tokens.toLocaleString()} tok
                             </span>
                           )}
+                          {!isStreaming && (
+                            <button
+                              type="button"
+                              onClick={() => void handleRegenerate(m)}
+                              className="inline-flex items-center gap-1 ml-1 text-[#9e998e] hover:text-[#eceae4] cursor-pointer"
+                              title="この回答を再生成"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>再生成</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -934,13 +1327,26 @@ export function WorkspaceApp({
                     <div className="w-7 h-7 rounded-lg bg-[#d97757]/15 border border-[#d97757]/30 flex items-center justify-center text-[#d97757] shrink-0 mt-0.5">
                       <Bot className="w-4 h-4 animate-pulse" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 space-y-2">
+                      {streamingThinking && (
+                        <div className="rounded-xl border border-[#302d29] bg-[#1e1c1a] p-3 space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs text-[#d97757]">
+                            <Brain className="w-3.5 h-3.5 animate-pulse" />
+                            <span>思考中...</span>
+                          </div>
+                          <div className="text-xs text-[#9e998e] whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
+                            {streamingThinking}
+                          </div>
+                        </div>
+                      )}
                       {streamingText ? (
                         <MarkdownRenderer content={streamingText} />
                       ) : (
-                        <span className="text-xs text-[#9e998e]">
-                          Claude が応答を生成中...
-                        </span>
+                        !streamingThinking && (
+                          <span className="text-xs text-[#9e998e]">
+                            Claude が応答を生成中...
+                          </span>
+                        )
                       )}
                     </div>
                   </div>
@@ -1003,22 +1409,77 @@ export function WorkspaceApp({
               className="w-full resize-none bg-transparent text-sm text-[#eceae4] placeholder-[#78736a] focus:outline-none"
             />
 
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <label
                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[#9e998e] hover:text-[#eceae4] hover:bg-[#2a2825] cursor-pointer"
-                  title="画像・テキストファイルを添付"
+                  title="画像・PDF・テキストファイルを添付"
                 >
                   <Paperclip className="w-4 h-4" />
-                  <span>添付</span>
+                  <span>添付 (PDF可)</span>
                   <input
                     type="file"
                     multiple
-                    accept="image/*,.txt,.md,.csv,.json,.ts,.tsx,.js,.jsx,.py,.go,.rs,.yaml,.yml,.sql,.sh"
+                    accept="image/*,.pdf,application/pdf,.txt,.md,.csv,.json,.ts,.tsx,.js,.jsx,.py,.go,.rs,.yaml,.yml,.sql,.sh"
                     onChange={handleFileAttach}
                     className="hidden"
                   />
                 </label>
+
+                <button
+                  type="button"
+                  onClick={() => setEnableThinking((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] border transition-colors cursor-pointer ${
+                    enableThinking
+                      ? "bg-[#d97757]/15 border-[#d97757]/50 text-[#f3c6b6]"
+                      : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
+                  }`}
+                  title="Extended Thinking (拡張思考)"
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>思考</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEnableWebSearch((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] border transition-colors cursor-pointer ${
+                    enableWebSearch
+                      ? "bg-sky-500/15 border-sky-500/40 text-sky-300"
+                      : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
+                  }`}
+                  title="Web 検索連携 (Anthropic API)"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Web検索</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEnableArtifacts((v) => !v)}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] border transition-colors cursor-pointer ${
+                    enableArtifacts
+                      ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                      : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
+                  }`}
+                  title="Artifacts プレビュー生成"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Artifacts</span>
+                </button>
+
+                <select
+                  value={responseStyle}
+                  onChange={(e) => setResponseStyle(e.target.value)}
+                  className="rounded-lg bg-[#191817] border border-[#302d29] px-2 py-1 text-[11px] text-[#b7b3aa] focus:outline-none focus:border-[#d97757]"
+                  title="回答スタイル"
+                >
+                  {RESPONSE_STYLES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      スタイル: {s.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {isStreaming ? (
@@ -1045,6 +1506,13 @@ export function WorkspaceApp({
           </div>
         </div>
       </main>
+
+      {activeArtifact && (
+        <ArtifactPanel
+          artifact={activeArtifact}
+          onClose={() => setActiveArtifact(null)}
+        />
+      )}
 
       {/* Modals */}
       {editingProject !== null && (

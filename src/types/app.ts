@@ -81,7 +81,7 @@ export interface ConversationItem {
 export interface MessageAttachment {
   name: string;
   mimeType: string;
-  kind: "image" | "text";
+  kind: "image" | "text" | "pdf";
   data: string;
 }
 
@@ -91,6 +91,7 @@ export interface MessageItem {
   user_id?: string;
   role: "user" | "assistant";
   content: string;
+  thinking_content?: string | null;
   attachments_json: string | null;
   input_tokens: number;
   output_tokens: number;
