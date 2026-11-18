@@ -1,0 +1,92 @@
+rules_version = '2';
+
+// =============================================================================
+// shared-claude Cloud Firestore Security Rules
+// =============================================================================
+//
+// アーキテクチャ方針 (Server-Only Access / Zero Client Access):
+//   このアプリケーションは Next.js (App Router) のサーバーサイド Route Handlers
+//   からのみ `firebase-admin` SDK 経由で Cloud Firestore にアクセスします。
+//   `firebase-admin` SDK はサービスアカウント権限で動作し、Firestore Security
+//   Rules をバイパスします。
+//
+//   クライアントサイド（Firebase Web SDK / REST API 等）からの直接的な
+//   読み取り・書き込みは一切使用しないため、すべてのクライアントアクセスを
+//   明示的に拒否（Deny-by-Default）します。
+//
+// 保護対象の機密情報および境界:
+//   - API キー情報 (`claude_connections.api_key_encrypted` 等)
+//   - 仮想アカウント認証情報 (`users.password_hash` 等)
+//   - 3階層ロール境界 (`system_admin` / `team_admin` / `member`) およびチーム間分離
+//   - システム設定・初期セットアップ状態 (`_system`)
+//
+// Assumed Collections:
+//   - _system            : システム全体設定・初期化状態
+//   - teams              : チーム情報（マルチテナント境界）
+//   - users              : ユーザーアカウント・認証情報・ロール (`system_admin` / `team_admin` / `member`)
+//   - claude_connections : Claude API / CLI 接続設定および暗号化済み API キー
+//   - projects           : ユーザー／チームに紐づくプロジェクト
+//   - project_files      : プロジェクト添付ファイル・コンテンツ
+//   - conversations      : チャット会話メタデータ
+//   - messages           : チャットメッセージ履歴・トークン使用量
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // デフォルト拒否 (Fail-Closed / Deny-by-Default)
+    // -------------------------------------------------------------------------
+    // すべてのドキュメントおよびサブコレクションに対するクライアントからの
+    // 直接アクセスを無条件で拒否します。
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // コレクション別 明示的拒否 (Explicit Collection-Level Denies)
+    // -------------------------------------------------------------------------
+    // サーバーサイド (`firebase-admin`) 専用であることを明確化し、
+    // 誤ったルール追加による情報漏洩・権限昇格を防ぐため各コレクションを明示します。
+
+    // システム管理メタデータ・セットアップ状態
+    match /_system/{docId} {
+      allow read, write: if false;
+    }
+
+    // チーム情報（テナント境界）
+    match /teams/{teamId} {
+      allow read, write: if false;
+    }
+
+    // ユーザー情報（password_hash 等の認証情報・ロール定義を含む）
+    match /users/{userId} {
+      allow read, write: if false;
+    }
+
+    // Claude 接続設定（api_key_encrypted 等の機密情報を含む）
+    match /claude_connections/{connectionId} {
+      allow read, write: if false;
+    }
+
+    // プロジェクト
+    match /projects/{projectId} {
+      allow read, write: if false;
+    }
+
+    // プロジェクトファイル
+    match /project_files/{fileId} {
+      allow read, write: if false;
+    }
+
+    // 会話スレッド
+    match /conversations/{conversationId} {
+      allow read, write: if false;
+    }
+
+    // メッセージ履歴
+    match /messages/{messageId} {
+      allow read, write: if false;
+    }
+  }
+}
