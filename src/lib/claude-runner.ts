@@ -192,7 +192,8 @@ async function runAnthropicApi(params: {
     );
   }
 
-  const client = new Anthropic({ apiKey });
+  const baseURL = params.connection.base_url?.trim() || undefined;
+  const client = new Anthropic({ apiKey, baseURL });
   const messages = buildAnthropicMessages(params.history);
 
   const stream = client.messages.stream(
@@ -246,6 +247,9 @@ async function runClaudeCli(params: {
     if (token) {
       env.CLAUDE_CODE_OAUTH_TOKEN = token;
     }
+  }
+  if (params.connection.base_url?.trim()) {
+    env.ANTHROPIC_BASE_URL = params.connection.base_url.trim();
   }
 
   if (params.connection.cli_config_dir?.trim()) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, ShieldCheck, Sparkles, Terminal } from "lucide-react";
+import { ChevronDown, ChevronRight, KeyRound, ShieldCheck, Sparkles, Terminal } from "lucide-react";
 import React, { useState } from "react";
 import { PublicUser } from "@/types/app";
 
@@ -25,7 +25,10 @@ export function AuthView({
   const [connectionName, setConnectionName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [oauthToken, setOauthToken] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [defaultModelOverride, setDefaultModelOverride] = useState("");
   const [cliConfigDir, setCliConfigDir] = useState("");
+  const [showAdvancedConn, setShowAdvancedConn] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [loading, setLoading] = useState(false);
 
@@ -46,6 +49,8 @@ export function AuthView({
             connectionName,
             apiKey,
             oauthToken,
+            baseUrl,
+            defaultModelOverride,
             cliConfigDir,
           }
         : { username, password };
@@ -205,7 +210,7 @@ export function AuthView({
               {connectionType === "anthropic_api" ? (
                 <div>
                   <label className="block text-xs text-[#9e998e] mb-1">
-                    Anthropic API キー（環境変数を使う場合は空欄）
+                    API キー（環境変数 ANTHROPIC_API_KEY を使う場合は空欄）
                   </label>
                   <input
                     type="password"
@@ -216,40 +221,77 @@ export function AuthView({
                   />
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-xs text-[#9e998e] mb-1">
-                      Claude OAuth トークン（CLAUDE_CODE_OAUTH_TOKEN）
-                    </label>
-                    <input
-                      type="password"
-                      value={oauthToken}
-                      onChange={(e) => setOauthToken(e.target.value)}
-                      placeholder="sk-ant-oat01-..."
-                      className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
-                    />
-                    <p className="mt-1 text-[11px] text-[#858077]">
-                      手元の端末で1回だけ{" "}
-                      <code className="px-1 rounded bg-[#191817]">
-                        npx -y @anthropic-ai/claude-code setup-token
-                      </code>{" "}
-                      を実行して取得した長期トークンを貼り付けます（自宅PCの常時起動不要）。
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#9e998e] mb-1">
-                      CLAUDE_CONFIG_DIR（ローカルCLI認証を使う場合のみ・任意）
-                    </label>
-                    <input
-                      type="text"
-                      value={cliConfigDir}
-                      onChange={(e) => setCliConfigDir(e.target.value)}
-                      placeholder="通常は空欄"
-                      className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs text-[#9e998e] mb-1">
+                    OAuth トークン（<code className="text-[#d97757]">claude setup-token</code> で発行）
+                  </label>
+                  <input
+                    type="password"
+                    value={oauthToken}
+                    onChange={(e) => setOauthToken(e.target.value)}
+                    placeholder="sk-ant-oat01-..."
+                    className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+                  />
                 </div>
               )}
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedConn((v) => !v)}
+                  className="inline-flex items-center gap-1 text-[11px] text-[#9e998e] hover:text-[#eceae4] cursor-pointer"
+                >
+                  {showAdvancedConn ? (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  )}
+                  <span>詳細オプション（互換エンドポイント Base URL など）</span>
+                </button>
+
+                {showAdvancedConn && (
+                  <div className="mt-2 space-y-2 rounded-lg border border-[#302d29] bg-[#191817] p-2.5">
+                    <div>
+                      <label className="block text-[11px] text-[#9e998e] mb-1">
+                        Base URL（省略時は https://api.anthropic.com）
+                      </label>
+                      <input
+                        type="url"
+                        value={baseUrl}
+                        onChange={(e) => setBaseUrl(e.target.value)}
+                        placeholder="https://api.anthropic.com"
+                        className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#9e998e] mb-1">
+                        互換サービス用カスタムモデル ID（任意）
+                      </label>
+                      <input
+                        type="text"
+                        value={defaultModelOverride}
+                        onChange={(e) => setDefaultModelOverride(e.target.value)}
+                        placeholder="例: anthropic/claude-sonnet-4.5"
+                        className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+                      />
+                    </div>
+                    {connectionType === "claude_cli" && (
+                      <div>
+                        <label className="block text-[11px] text-[#9e998e] mb-1">
+                          ローカル認証ディレクトリ (CLAUDE_CONFIG_DIR)
+                        </label>
+                        <input
+                          type="text"
+                          value={cliConfigDir}
+                          onChange={(e) => setCliConfigDir(e.target.value)}
+                          placeholder="通常は空欄"
+                          className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

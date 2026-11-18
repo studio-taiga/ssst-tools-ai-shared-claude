@@ -37,6 +37,8 @@ export interface PublicConnection {
   teamId: string | null;
   hasCustomApiKey: boolean;
   hasOauthToken: boolean;
+  baseUrl: string | null;
+  defaultModelOverride: string | null;
   cliConfigDir: string | null;
   isActive: boolean;
   isDefault: boolean;

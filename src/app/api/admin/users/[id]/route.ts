@@ -38,6 +38,7 @@ export async function PATCH(
   }
 
   const body = (await req.json()) as {
+    username?: string;
     displayName?: string;
     role?: UserRole;
     teamId?: string | null;
@@ -48,6 +49,34 @@ export async function PATCH(
     monthlyTokenLimit?: number | null;
     isActive?: boolean;
   };
+
+  let nextUsername = target.username;
+  if (typeof body.username === "string" && body.username.trim()) {
+    const normalized = body.username.trim().toLowerCase();
+    if (!/^[a-z0-9_-]{3,32}$/.test(normalized)) {
+      return NextResponse.json(
+        {
+          error:
+            "ユーザー名は3〜32文字の半角英数字・ハイフン・アンダースコアで入力してください。",
+        },
+        { status: 400 }
+      );
+    }
+    if (normalized !== target.username) {
+      const dup = await db
+        .collection(COL.USERS)
+        .where("username", "==", normalized)
+        .limit(1)
+        .get();
+      if (!dup.empty) {
+        return NextResponse.json(
+          { error: "このユーザー名は既に使用されています。" },
+          { status: 409 }
+        );
+      }
+      nextUsername = normalized;
+    }
+  }
 
   if (id === current.id && body.isActive === false) {
     return NextResponse.json(
@@ -89,6 +118,7 @@ export async function PATCH(
   }
 
   await ref.update({
+    username: nextUsername,
     display_name:
       typeof body.displayName === "string" && body.displayName.trim()
         ? body.displayName.trim()

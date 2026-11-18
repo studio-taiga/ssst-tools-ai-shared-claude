@@ -11,6 +11,8 @@ export interface PublicConnection {
   teamId: string | null;
   hasCustomApiKey: boolean;
   hasOauthToken: boolean;
+  baseUrl: string | null;
+  defaultModelOverride: string | null;
   cliConfigDir: string | null;
   isActive: boolean;
   isDefault: boolean;
@@ -26,6 +28,8 @@ export function toPublicConnection(row: ClaudeConnectionRow): PublicConnection {
     teamId: row.team_id ?? null,
     hasCustomApiKey: Boolean(row.api_key_encrypted),
     hasOauthToken: Boolean(row.oauth_token_encrypted),
+    baseUrl: row.base_url ?? null,
+    defaultModelOverride: row.default_model_override ?? null,
     cliConfigDir: row.cli_config_dir,
     isActive: row.is_active,
     isDefault: row.is_default,

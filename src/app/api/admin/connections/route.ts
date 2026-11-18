@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
     teamId?: string | null;
     apiKey?: string;
     oauthToken?: string;
+    baseUrl?: string;
+    defaultModelOverride?: string;
     cliConfigDir?: string;
     isDefault?: boolean;
   };
@@ -130,6 +132,8 @@ export async function POST(req: NextRequest) {
     team_id: teamId,
     api_key_encrypted: encryptedKey,
     oauth_token_encrypted: encryptedOauthToken,
+    base_url: body.baseUrl?.trim() || null,
+    default_model_override: body.defaultModelOverride?.trim() || null,
     cli_config_dir: cliDir,
     is_active: true,
     is_default: isDefault,

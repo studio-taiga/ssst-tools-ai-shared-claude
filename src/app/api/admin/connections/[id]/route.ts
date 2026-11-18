@@ -39,8 +39,12 @@ export async function PATCH(
 
   const body = (await req.json()) as {
     name?: string;
+    scope?: "global" | "team";
+    teamId?: string | null;
     apiKey?: string;
     oauthToken?: string;
+    baseUrl?: string | null;
+    defaultModelOverride?: string | null;
     cliConfigDir?: string | null;
     isActive?: boolean;
     isDefault?: boolean;
@@ -70,13 +74,30 @@ export async function PATCH(
     await batch.commit();
   }
 
+  let nextScope = existing.scope ?? "global";
+  let nextTeamId = existing.team_id ?? null;
+  if (user.role === "system_admin" && (body.scope === "global" || body.scope === "team")) {
+    nextScope = body.scope;
+    nextTeamId = nextScope === "team" ? (body.teamId ?? nextTeamId) : null;
+  }
+
   await ref.update({
     name:
       typeof body.name === "string" && body.name.trim()
         ? body.name.trim()
         : existing.name,
+    scope: nextScope,
+    team_id: nextTeamId,
     api_key_encrypted: encryptedKey,
     oauth_token_encrypted: encryptedOauthToken,
+    base_url:
+      body.baseUrl !== undefined
+        ? body.baseUrl?.trim() || null
+        : existing.base_url ?? null,
+    default_model_override:
+      body.defaultModelOverride !== undefined
+        ? body.defaultModelOverride?.trim() || null
+        : existing.default_model_override ?? null,
     cli_config_dir:
       body.cliConfigDir !== undefined
         ? body.cliConfigDir?.trim() || null

@@ -3,7 +3,10 @@
 import {
   Building2,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   KeyRound,
+  Pencil,
   Plus,
   RefreshCw,
   Shield,
@@ -76,8 +79,36 @@ export function AdminModal({
   const [connTeamId, setConnTeamId] = useState<string>(currentTeamId ?? "");
   const [connApiKey, setConnApiKey] = useState("");
   const [connOauthToken, setConnOauthToken] = useState("");
+  const [connBaseUrl, setConnBaseUrl] = useState("");
+  const [connModelOverride, setConnModelOverride] = useState("");
   const [connCliDir, setConnCliDir] = useState("");
+  const [showConnAdvanced, setShowConnAdvanced] = useState(false);
   const [connDefault, setConnDefault] = useState(false);
+
+  // Edit user state
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editRole, setEditRole] = useState<UserRole>("member");
+  const [editTeamId, setEditTeamId] = useState("");
+  const [editTokenLimit, setEditTokenLimit] = useState("");
+
+  // Edit team state
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamDesc, setEditTeamDesc] = useState("");
+  const [editTeamLimit, setEditTeamLimit] = useState("");
+
+  // Edit connection state
+  const [editingConnId, setEditingConnId] = useState<string | null>(null);
+  const [editConnName, setEditConnName] = useState("");
+  const [editConnScope, setEditConnScope] = useState<"global" | "team">("global");
+  const [editConnTeamId, setEditConnTeamId] = useState("");
+  const [editConnIsActive, setEditConnIsActive] = useState(true);
+  const [editConnSecret, setEditConnSecret] = useState("");
+  const [editConnBaseUrl, setEditConnBaseUrl] = useState("");
+  const [editConnModelOverride, setEditConnModelOverride] = useState("");
+  const [editConnCliDir, setEditConnCliDir] = useState("");
 
   const [testResults, setTestResults] = useState<
     Record<string, { loading: boolean; ok?: boolean; message?: string }>
@@ -237,6 +268,132 @@ export function AdminModal({
     await loadData();
   };
 
+  const startEditUser = (u: PublicUser) => {
+    setEditingUserId(u.id);
+    setEditUsername(u.username);
+    setEditDisplayName(u.displayName);
+    setEditRole(u.role);
+    setEditTeamId(u.teamId ?? "");
+    setEditTokenLimit(
+      u.monthlyTokenLimit !== null ? String(u.monthlyTokenLimit) : ""
+    );
+  };
+
+  const handleSaveUserEdit = async (u: PublicUser) => {
+    setError(null);
+    const limitNum = editTokenLimit.trim()
+      ? Number.parseInt(editTokenLimit.trim(), 10)
+      : null;
+
+    const payload: Record<string, unknown> = {
+      username: editUsername,
+      displayName: editDisplayName,
+      monthlyTokenLimit:
+        limitNum !== null && !Number.isNaN(limitNum) ? limitNum : null,
+    };
+    if (isSystemAdmin) {
+      if (u.id !== currentUserId) {
+        payload.role = editRole;
+      }
+      payload.teamId = editTeamId || null;
+    }
+
+    const res = await fetch(`/api/admin/users/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error || "アカウント更新に失敗しました。");
+      return;
+    }
+    setEditingUserId(null);
+    await loadData();
+  };
+
+  const startEditTeam = (t: TeamItem) => {
+    setEditingTeamId(t.id);
+    setEditTeamName(t.name);
+    setEditTeamDesc(t.description);
+    setEditTeamLimit(
+      t.monthlyTokenLimit !== null ? String(t.monthlyTokenLimit) : ""
+    );
+  };
+
+  const handleSaveTeamEdit = async (t: TeamItem) => {
+    setError(null);
+    const limitNum = editTeamLimit.trim()
+      ? Number.parseInt(editTeamLimit.trim(), 10)
+      : null;
+    const res = await fetch(`/api/admin/teams/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editTeamName,
+        description: editTeamDesc,
+        monthlyTokenLimit:
+          limitNum !== null && !Number.isNaN(limitNum) ? limitNum : null,
+      }),
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error || "チーム更新に失敗しました。");
+      return;
+    }
+    setEditingTeamId(null);
+    await loadData();
+  };
+
+  const startEditConn = (c: PublicConnection) => {
+    setEditingConnId(c.id);
+    setEditConnName(c.name);
+    setEditConnScope(c.scope);
+    setEditConnTeamId(c.teamId ?? teams[0]?.id ?? "");
+    setEditConnIsActive(c.isActive);
+    setEditConnSecret("");
+    setEditConnBaseUrl(c.baseUrl ?? "");
+    setEditConnModelOverride(c.defaultModelOverride ?? "");
+    setEditConnCliDir(c.cliConfigDir ?? "");
+  };
+
+  const handleSaveConnEdit = async (c: PublicConnection) => {
+    setError(null);
+    const payload: Record<string, unknown> = {
+      name: editConnName,
+      isActive: editConnIsActive,
+      baseUrl: editConnBaseUrl.trim() || null,
+      defaultModelOverride: editConnModelOverride.trim() || null,
+    };
+    if (isSystemAdmin) {
+      payload.scope = editConnScope;
+      payload.teamId = editConnScope === "team" ? editConnTeamId || null : null;
+    }
+    if (c.type === "anthropic_api" && editConnSecret.trim()) {
+      payload.apiKey = editConnSecret.trim();
+    }
+    if (c.type === "claude_cli") {
+      if (editConnSecret.trim()) {
+        payload.oauthToken = editConnSecret.trim();
+      }
+      payload.cliConfigDir = editConnCliDir.trim() || null;
+    }
+
+    const res = await fetch(`/api/admin/connections/${c.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) {
+      setError(data.error || "接続の更新に失敗しました。");
+      return;
+    }
+    setEditingConnId(null);
+    await loadData();
+    onConnectionsChanged();
+  };
+
   const handleToggleUserActive = async (u: PublicUser) => {
     setError(null);
     const res = await fetch(`/api/admin/users/${u.id}`, {
@@ -307,6 +464,8 @@ export function AdminModal({
             : currentTeamId,
         apiKey: connType === "anthropic_api" ? connApiKey : undefined,
         oauthToken: connType === "claude_cli" ? connOauthToken : undefined,
+        baseUrl: connBaseUrl.trim() || undefined,
+        defaultModelOverride: connModelOverride.trim() || undefined,
         cliConfigDir: connType === "claude_cli" ? connCliDir : undefined,
         isDefault: isSystemAdmin ? connDefault : false,
       }),
@@ -319,6 +478,8 @@ export function AdminModal({
     setConnName("");
     setConnApiKey("");
     setConnOauthToken("");
+    setConnBaseUrl("");
+    setConnModelOverride("");
     setConnCliDir("");
     setConnDefault(false);
     await loadData();
@@ -547,81 +708,204 @@ export function AdminModal({
                   const canManageTarget =
                     u.id !== currentUserId &&
                     (isSystemAdmin || u.role === "member");
+                  const canEditTarget =
+                    isSystemAdmin ||
+                    u.id === currentUserId ||
+                    u.role === "member";
+                  const isEditing = editingUserId === u.id;
+
                   return (
                     <div
                       key={u.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#302d29] bg-[#191817] px-4 py-3"
+                      className="rounded-xl border border-[#302d29] bg-[#191817] px-4 py-3 space-y-3"
                     >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-[#faf9f5]">
-                            {u.displayName}
-                          </span>
-                          <span className="text-xs font-mono text-[#858077]">
-                            @{u.username}
-                          </span>
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              u.role === "system_admin"
-                                ? "bg-[#d97757]/25 text-[#f3c6b6]"
-                                : u.role === "team_admin"
-                                ? "bg-sky-500/20 text-sky-300"
-                                : "bg-[#302d29] text-[#b7b3aa]"
-                            }`}
-                          >
-                            {ROLE_LABELS[u.role]}
-                          </span>
-                          {u.teamName && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#252320] text-[#b7b3aa]">
-                              {u.teamName}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-[#faf9f5]">
+                              {u.displayName}
                             </span>
-                          )}
-                          {!u.isActive && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300">
-                              無効
+                            <span className="text-xs font-mono text-[#858077]">
+                              @{u.username}
                             </span>
-                          )}
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                u.role === "system_admin"
+                                  ? "bg-[#d97757]/25 text-[#f3c6b6]"
+                                  : u.role === "team_admin"
+                                  ? "bg-sky-500/20 text-sky-300"
+                                  : "bg-[#302d29] text-[#b7b3aa]"
+                              }`}
+                            >
+                              {ROLE_LABELS[u.role]}
+                            </span>
+                            {u.teamName && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#252320] text-[#b7b3aa]">
+                                {u.teamName}
+                              </span>
+                            )}
+                            {!u.isActive && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300">
+                                無効
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-[#9e998e] mt-1">
+                            今月トークン: {u.monthlyTokens.toLocaleString()}
+                            {u.monthlyTokenLimit !== null
+                              ? ` / ${u.monthlyTokenLimit.toLocaleString()}`
+                              : " (上限なし)"}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-[#9e998e] mt-1">
-                          今月トークン: {u.monthlyTokens.toLocaleString()}
-                          {u.monthlyTokenLimit !== null
-                            ? ` / ${u.monthlyTokenLimit.toLocaleString()}`
-                            : " (上限なし)"}
+
+                        <div className="flex items-center gap-2">
+                          {canEditTarget && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                isEditing
+                                  ? setEditingUserId(null)
+                                  : startEditUser(u)
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#eceae4] hover:bg-[#2a2825] cursor-pointer"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>{isEditing ? "閉じる" : "編集"}</span>
+                            </button>
+                          )}
+                          {canEditTarget && (
+                            <button
+                              type="button"
+                              onClick={() => handleResetPassword(u)}
+                              className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                            >
+                              PW変更
+                            </button>
+                          )}
+                          {canManageTarget && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleUserActive(u)}
+                                className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                              >
+                                {u.isActive ? "無効化" : "有効化"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u)}
+                                className="p-1.5 text-[#858077] hover:text-red-400 cursor-pointer"
+                                title="削除"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {(isSystemAdmin ||
-                          u.id === currentUserId ||
-                          u.role === "member") && (
-                          <button
-                            type="button"
-                            onClick={() => handleResetPassword(u)}
-                            className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
-                          >
-                            PW変更
-                          </button>
-                        )}
-                        {canManageTarget && (
-                          <>
+                      {isEditing && (
+                        <div className="pt-3 border-t border-[#2a2825] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              ユーザー名 (半角英数)
+                            </label>
+                            <input
+                              type="text"
+                              value={editUsername}
+                              onChange={(e) => setEditUsername(e.target.value)}
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              表示名
+                            </label>
+                            <input
+                              type="text"
+                              value={editDisplayName}
+                              onChange={(e) =>
+                                setEditDisplayName(e.target.value)
+                              }
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          {isSystemAdmin && (
+                            <>
+                              <div>
+                                <label className="block text-[10px] text-[#858077] mb-1">
+                                  権限
+                                </label>
+                                <select
+                                  value={editRole}
+                                  disabled={u.id === currentUserId}
+                                  onChange={(e) =>
+                                    setEditRole(e.target.value as UserRole)
+                                  }
+                                  className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] disabled:opacity-50"
+                                >
+                                  <option value="member">一般メンバー</option>
+                                  <option value="team_admin">
+                                    チーム管理者
+                                  </option>
+                                  <option value="system_admin">
+                                    システム管理者
+                                  </option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-[#858077] mb-1">
+                                  所属チーム
+                                </label>
+                                <select
+                                  value={editTeamId}
+                                  onChange={(e) =>
+                                    setEditTeamId(e.target.value)
+                                  }
+                                  className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                                >
+                                  <option value="">チームなし</option>
+                                  {teams.map((t) => (
+                                    <option key={t.id} value={t.id}>
+                                      {t.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          )}
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              月間トークン上限 (空=無制限)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={editTokenLimit}
+                              onChange={(e) =>
+                                setEditTokenLimit(e.target.value)
+                              }
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div className="flex items-end justify-end gap-2">
                             <button
                               type="button"
-                              onClick={() => handleToggleUserActive(u)}
-                              className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                              onClick={() => setEditingUserId(null)}
+                              className="rounded-lg border border-[#35322e] px-3 py-1.5 text-xs text-[#b7b3aa] cursor-pointer"
                             >
-                              {u.isActive ? "無効化" : "有効化"}
+                              キャンセル
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDeleteUser(u)}
-                              className="p-1.5 text-[#858077] hover:text-red-400 cursor-pointer"
-                              title="削除"
+                              onClick={() => void handleSaveUserEdit(u)}
+                              className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              変更を保存
                             </button>
-                          </>
-                        )}
-                      </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -675,61 +959,133 @@ export function AdminModal({
               )}
 
               <div className="space-y-2">
-                {teams.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#302d29] bg-[#191817] px-4 py-3"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-[#faf9f5]">
-                          {t.name}
-                        </span>
-                        {!t.isActive && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300">
-                            無効
-                          </span>
+                {teams.map((t) => {
+                  const isEditing = editingTeamId === t.id;
+                  return (
+                    <div
+                      key={t.id}
+                      className="rounded-xl border border-[#302d29] bg-[#191817] px-4 py-3 space-y-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-[#faf9f5]">
+                              {t.name}
+                            </span>
+                            {!t.isActive && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300">
+                                無効
+                              </span>
+                            )}
+                          </div>
+                          {t.description && (
+                            <div className="text-xs text-[#9e998e] mt-0.5">
+                              {t.description}
+                            </div>
+                          )}
+                          <div className="text-[11px] text-[#858077] mt-1 flex gap-4">
+                            <span>メンバー数: {t.memberCount ?? 0}</span>
+                            <span>
+                              今月トークン: {t.monthlyTokens.toLocaleString()}
+                              {t.monthlyTokenLimit !== null
+                                ? ` / ${t.monthlyTokenLimit.toLocaleString()}`
+                                : " (上限なし)"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isSystemAdmin && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                isEditing
+                                  ? setEditingTeamId(null)
+                                  : startEditTeam(t)
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#eceae4] hover:bg-[#2a2825] cursor-pointer"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>{isEditing ? "閉じる" : "編集"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleTeamActive(t)}
+                              className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
+                            >
+                              {t.isActive ? "無効化" : "有効化"}
+                            </button>
+                            {t.id !== currentTeamId && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTeam(t)}
+                                className="p-1.5 text-[#858077] hover:text-red-400 cursor-pointer"
+                                title="削除"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
-                      {t.description && (
-                        <div className="text-xs text-[#9e998e] mt-0.5">
-                          {t.description}
+
+                      {isEditing && isSystemAdmin && (
+                        <div className="pt-3 border-t border-[#2a2825] grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              チーム名
+                            </label>
+                            <input
+                              type="text"
+                              value={editTeamName}
+                              onChange={(e) => setEditTeamName(e.target.value)}
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              説明
+                            </label>
+                            <input
+                              type="text"
+                              value={editTeamDesc}
+                              onChange={(e) => setEditTeamDesc(e.target.value)}
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              月間トークン上限 (空=無制限)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={editTeamLimit}
+                              onChange={(e) => setEditTeamLimit(e.target.value)}
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div className="sm:col-span-3 flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTeamId(null)}
+                              className="rounded-lg border border-[#35322e] px-3 py-1.5 text-xs text-[#b7b3aa] cursor-pointer"
+                            >
+                              キャンセル
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveTeamEdit(t)}
+                              className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
+                            >
+                              変更を保存
+                            </button>
+                          </div>
                         </div>
                       )}
-                      <div className="text-[11px] text-[#858077] mt-1 flex gap-4">
-                        <span>メンバー数: {t.memberCount ?? 0}</span>
-                        <span>
-                          今月トークン: {t.monthlyTokens.toLocaleString()}
-                          {t.monthlyTokenLimit !== null
-                            ? ` / ${t.monthlyTokenLimit.toLocaleString()}`
-                            : " (上限なし)"}
-                        </span>
-                      </div>
                     </div>
-
-                    {isSystemAdmin && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleTeamActive(t)}
-                          className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
-                        >
-                          {t.isActive ? "無効化" : "有効化"}
-                        </button>
-                        {t.id !== currentTeamId && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTeam(t)}
-                            className="p-1.5 text-[#858077] hover:text-red-400 cursor-pointer"
-                            title="削除"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           ) : (
@@ -807,34 +1163,76 @@ export function AdminModal({
                     type="password"
                     value={connApiKey}
                     onChange={(e) => setConnApiKey(e.target.value)}
-                    placeholder="sk-ant-...（環境変数 ANTHROPIC_API_KEY を使う場合は空欄）"
+                    placeholder="APIキー: sk-ant-...（環境変数を使う場合は空欄）"
                     className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                   />
                 ) : (
-                  <div className="space-y-2">
-                    <input
-                      type="password"
-                      value={connOauthToken}
-                      onChange={(e) => setConnOauthToken(e.target.value)}
-                      placeholder="sk-ant-oat01-...（CLAUDE_CODE_OAUTH_TOKEN: `claude setup-token` で発行）"
-                      className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
-                    />
-                    <input
-                      type="text"
-                      value={connCliDir}
-                      onChange={(e) => setConnCliDir(e.target.value)}
-                      placeholder="CLAUDE_CONFIG_DIR（OAuthトークンを使う場合は空欄でOK）"
-                      className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
-                    />
-                    <p className="text-[11px] text-[#858077]">
-                      ※手元の端末で{" "}
-                      <code className="px-1 rounded bg-[#22201e]">
-                        npx -y @anthropic-ai/claude-code setup-token
-                      </code>{" "}
-                      を1回実行して発行した長期トークン（約1年有効）を登録すると、自宅PCを起動し続けずにクラウドからプラン枠を利用できます。
-                    </p>
-                  </div>
+                  <input
+                    type="password"
+                    value={connOauthToken}
+                    onChange={(e) => setConnOauthToken(e.target.value)}
+                    placeholder="OAuthトークン: sk-ant-oat01-...（`claude setup-token` で発行）"
+                    className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
+                  />
                 )}
+
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowConnAdvanced((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[11px] text-[#9e998e] hover:text-[#eceae4] cursor-pointer"
+                  >
+                    {showConnAdvanced ? (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    )}
+                    <span>詳細オプション（互換 Base URL / カスタムモデル / CLIディレクトリ）</span>
+                  </button>
+
+                  {showConnAdvanced && (
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-[#302d29] bg-[#22201e] p-3">
+                      <div>
+                        <label className="block text-[10px] text-[#858077] mb-1">
+                          互換 Base URL（標準: https://api.anthropic.com）
+                        </label>
+                        <input
+                          type="url"
+                          value={connBaseUrl}
+                          onChange={(e) => setConnBaseUrl(e.target.value)}
+                          placeholder="https://api.anthropic.com"
+                          className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-[#858077] mb-1">
+                          カスタムモデル ID 上書き（任意）
+                        </label>
+                        <input
+                          type="text"
+                          value={connModelOverride}
+                          onChange={(e) => setConnModelOverride(e.target.value)}
+                          placeholder="例: anthropic/claude-sonnet-4.5"
+                          className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4]"
+                        />
+                      </div>
+                      {connType === "claude_cli" && (
+                        <div className="sm:col-span-2">
+                          <label className="block text-[10px] text-[#858077] mb-1">
+                            ローカル認証ディレクトリ (CLAUDE_CONFIG_DIR)
+                          </label>
+                          <input
+                            type="text"
+                            value={connCliDir}
+                            onChange={(e) => setConnCliDir(e.target.value)}
+                            placeholder="OAuthトークンを使う場合は空欄"
+                            className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4]"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex items-center justify-between">
                   {isSystemAdmin ? (
@@ -916,6 +1314,22 @@ export function AdminModal({
                           {canEditConn && (
                             <button
                               type="button"
+                              onClick={() =>
+                                editingConnId === c.id
+                                  ? setEditingConnId(null)
+                                  : startEditConn(c)
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#eceae4] hover:bg-[#2a2825] cursor-pointer"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>
+                                {editingConnId === c.id ? "閉じる" : "編集"}
+                              </span>
+                            </button>
+                          )}
+                          {canEditConn && (
+                            <button
+                              type="button"
                               onClick={() => handleDeleteConnection(c)}
                               className="p-1.5 text-[#858077] hover:text-red-400 cursor-pointer"
                               title="削除"
@@ -926,19 +1340,175 @@ export function AdminModal({
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-[#858077]">
-                        {c.type === "claude_cli"
-                          ? c.hasOauthToken
-                            ? "認証: OAuth トークン (CLAUDE_CODE_OAUTH_TOKEN) 暗号化保存済み"
-                            : `設定ディレクトリ: ${
-                                c.cliConfigDir || "~/.claude (デフォルト)"
-                              }`
-                          : `APIキー: ${
-                              c.hasCustomApiKey
-                                ? "暗号化して保存済み"
-                                : "環境変数 ANTHROPIC_API_KEY"
-                            }`}
+                      <div className="text-[11px] text-[#858077] space-y-0.5">
+                        <div>
+                          {c.type === "claude_cli"
+                            ? c.hasOauthToken
+                              ? "認証: OAuth トークン (CLAUDE_CODE_OAUTH_TOKEN) 保存済み"
+                              : `認証ディレクトリ: ${
+                                  c.cliConfigDir || "~/.claude (デフォルト)"
+                                }`
+                            : `APIキー: ${
+                                c.hasCustomApiKey
+                                  ? "暗号化して保存済み"
+                                  : "環境変数 ANTHROPIC_API_KEY"
+                              }`}
+                        </div>
+                        {(c.baseUrl || c.defaultModelOverride) && (
+                          <div className="text-[#9e998e]">
+                            {c.baseUrl && <span>Base URL: {c.baseUrl}</span>}
+                            {c.baseUrl && c.defaultModelOverride && " ・ "}
+                            {c.defaultModelOverride && (
+                              <span>モデル: {c.defaultModelOverride}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
+
+                      {editingConnId === c.id && (
+                        <div className="pt-3 border-t border-[#2a2825] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              接続名
+                            </label>
+                            <input
+                              type="text"
+                              value={editConnName}
+                              onChange={(e) => setEditConnName(e.target.value)}
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              {c.type === "anthropic_api"
+                                ? "APIキー差し替え（変更しない場合は空欄）"
+                                : "OAuthトークン差し替え（変更しない場合は空欄）"}
+                            </label>
+                            <input
+                              type="password"
+                              value={editConnSecret}
+                              onChange={(e) =>
+                                setEditConnSecret(e.target.value)
+                              }
+                              placeholder="変更時のみ入力"
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              互換 Base URL（空欄=Anthropic標準）
+                            </label>
+                            <input
+                              type="url"
+                              value={editConnBaseUrl}
+                              onChange={(e) =>
+                                setEditConnBaseUrl(e.target.value)
+                              }
+                              placeholder="https://api.anthropic.com"
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#858077] mb-1">
+                              カスタムモデル ID 上書き（任意）
+                            </label>
+                            <input
+                              type="text"
+                              value={editConnModelOverride}
+                              onChange={(e) =>
+                                setEditConnModelOverride(e.target.value)
+                              }
+                              placeholder="例: anthropic/claude-sonnet-4.5"
+                              className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                            />
+                          </div>
+                          {c.type === "claude_cli" && (
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] text-[#858077] mb-1">
+                                ローカル認証ディレクトリ (CLAUDE_CONFIG_DIR)
+                              </label>
+                              <input
+                                type="text"
+                                value={editConnCliDir}
+                                onChange={(e) =>
+                                  setEditConnCliDir(e.target.value)
+                                }
+                                placeholder="OAuthトークン利用時は空欄"
+                                className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                              />
+                            </div>
+                          )}
+                          {isSystemAdmin && (
+                            <>
+                              <div>
+                                <label className="block text-[10px] text-[#858077] mb-1">
+                                  公開スコープ
+                                </label>
+                                <select
+                                  value={editConnScope}
+                                  onChange={(e) =>
+                                    setEditConnScope(
+                                      e.target.value as "global" | "team"
+                                    )
+                                  }
+                                  className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                                >
+                                  <option value="global">全体共通</option>
+                                  <option value="team">特定チーム専用</option>
+                                </select>
+                              </div>
+                              {editConnScope === "team" && (
+                                <div>
+                                  <label className="block text-[10px] text-[#858077] mb-1">
+                                    対象チーム
+                                  </label>
+                                  <select
+                                    value={editConnTeamId}
+                                    onChange={(e) =>
+                                      setEditConnTeamId(e.target.value)
+                                    }
+                                    className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4]"
+                                  >
+                                    {teams.map((t) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          <div className="sm:col-span-2 flex items-center justify-between gap-2">
+                            <label className="inline-flex items-center gap-2 text-xs text-[#b7b3aa] cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={editConnIsActive}
+                                onChange={(e) =>
+                                  setEditConnIsActive(e.target.checked)
+                                }
+                              />
+                              <span>この接続先を有効にする</span>
+                            </label>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEditingConnId(null)}
+                                className="rounded-lg border border-[#35322e] px-3 py-1.5 text-xs text-[#b7b3aa] cursor-pointer"
+                              >
+                                キャンセル
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveConnEdit(c)}
+                                className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
+                              >
+                                変更を保存
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {tr && !tr.loading && (
                         <div

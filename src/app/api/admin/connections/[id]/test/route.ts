@@ -51,13 +51,29 @@ export async function POST(
       );
     }
 
+    const baseURL = conn.base_url?.trim() || undefined;
     try {
-      const client = new Anthropic({ apiKey });
-      const models = await client.models.list({ limit: 5 });
-      return NextResponse.json({
-        ok: true,
-        message: `接続成功！(${models.data.length}件のモデルを確認)`,
-      });
+      const client = new Anthropic({ apiKey, baseURL });
+      try {
+        const models = await client.models.list({ limit: 5 });
+        return NextResponse.json({
+          ok: true,
+          message: `接続成功！(${models.data.length}件のモデルを確認)`,
+        });
+      } catch {
+        // 互換エンドポイントで /v1/models が未実装の場合のフォールバック
+        const testModel =
+          conn.default_model_override?.trim() || "claude-haiku-5-5";
+        await client.messages.create({
+          model: testModel,
+          max_tokens: 4,
+          messages: [{ role: "user", content: "OK" }],
+        });
+        return NextResponse.json({
+          ok: true,
+          message: `接続成功！(モデル: ${testModel})`,
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "接続に失敗しました";
       return NextResponse.json({ ok: false, message: msg }, { status: 400 });
@@ -71,6 +87,9 @@ export async function POST(
     if (token) {
       env.CLAUDE_CODE_OAUTH_TOKEN = token;
     }
+  }
+  if (conn.base_url?.trim()) {
+    env.ANTHROPIC_BASE_URL = conn.base_url.trim();
   }
   if (conn.cli_config_dir?.trim()) {
     env.CLAUDE_CONFIG_DIR = conn.cli_config_dir.trim();

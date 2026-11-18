@@ -193,16 +193,26 @@ export function WorkspaceApp({
     connectionId?: string | null;
     projectId?: string | null;
   }) => {
+    let effectiveModel = patch.model;
     if (patch.model !== undefined) setSelectedModel(patch.model);
-    if (patch.connectionId !== undefined)
+    if (patch.connectionId !== undefined) {
       setSelectedConnectionId(patch.connectionId ?? "");
+      const targetConn = connections.find((c) => c.id === patch.connectionId);
+      if (targetConn?.defaultModelOverride && patch.model === undefined) {
+        effectiveModel = targetConn.defaultModelOverride;
+        setSelectedModel(effectiveModel);
+      }
+    }
     if (patch.projectId !== undefined) setDraftProjectId(patch.projectId);
 
     if (!activeConvId) return;
     const res = await fetch(`/api/conversations/${activeConvId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
+      body: JSON.stringify({
+        ...patch,
+        ...(effectiveModel !== undefined ? { model: effectiveModel } : {}),
+      }),
     });
     if (res.ok) {
       void loadConversations(selectedProjectId);
@@ -647,14 +657,36 @@ export function WorkspaceApp({
               onChange={(e) =>
                 handleUpdateConversationMeta({ model: e.target.value })
               }
-              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[200px]"
               title="モデル選択"
             >
-              {CLAUDE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
+              {(() => {
+                const activeConn = connections.find(
+                  (c) => c.id === selectedConnectionId
+                );
+                const customIds = [
+                  activeConn?.defaultModelOverride,
+                  selectedModel,
+                ].filter(
+                  (id): id is string =>
+                    Boolean(id) && !CLAUDE_MODELS.some((m) => m.id === id)
+                );
+                const uniqueCustomIds = Array.from(new Set(customIds));
+                return (
+                  <>
+                    {uniqueCustomIds.map((id) => (
+                      <option key={id} value={id}>
+                        {id} (互換/カスタム)
+                      </option>
+                    ))}
+                    {CLAUDE_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </>
+                );
+              })()}
             </select>
 
             <select
