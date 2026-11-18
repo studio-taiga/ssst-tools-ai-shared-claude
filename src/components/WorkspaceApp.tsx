@@ -1030,15 +1030,37 @@ export function WorkspaceApp({
                           {id} (カスタム)
                         </option>
                       ))}
-                      {availableRemoteModels.length > 0 && (
-                        <optgroup label="接続先の利用可能モデル">
-                          {availableRemoteModels.map((rm) => (
-                            <option key={rm.id} value={rm.id}>
-                              {rm.displayName}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
+                      {(() => {
+                        const freeModels = availableRemoteModels.filter((rm) =>
+                          rm.id.endsWith(":free")
+                        );
+                        return (
+                          <>
+                            {freeModels.length > 0 && (
+                              <optgroup
+                                label={`無料モデル :free (${freeModels.length}件)`}
+                              >
+                                {freeModels.map((rm) => (
+                                  <option key={`free-${rm.id}`} value={rm.id}>
+                                    {rm.displayName}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {availableRemoteModels.length > 0 && (
+                              <optgroup
+                                label={`接続先の利用可能モデル (${availableRemoteModels.length}件・名前順)`}
+                              >
+                                {availableRemoteModels.map((rm) => (
+                                  <option key={rm.id} value={rm.id}>
+                                    {rm.displayName}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </>
+                        );
+                      })()}
                       <optgroup label="Claude 標準モデル">
                         {CLAUDE_MODELS.map((m) => (
                           <option key={m.id} value={m.id}>

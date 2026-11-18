@@ -5,6 +5,12 @@ import { decryptText } from "@/lib/crypto";
 import { ClaudeConnectionRow, COL } from "@/lib/db";
 import { getFirestoreDb } from "@/lib/firebase";
 
+interface RawModelEntry {
+  id: string;
+  display_name?: string;
+  name?: string;
+}
+
 export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -41,17 +47,61 @@ export async function GET(
     return NextResponse.json({ models: [] });
   }
 
+  const baseUrl = conn.base_url?.trim();
+  const collected: Array<{ id: string; displayName: string }> = [];
+
   try {
-    const client = new Anthropic({
-      apiKey,
-      baseURL: conn.base_url?.trim() || undefined,
-    });
-    const list = await client.models.list({ limit: 50 });
-    const models = list.data.map((m) => ({
-      id: m.id,
-      displayName: m.display_name || m.id,
-    }));
-    return NextResponse.json({ models });
+    if (baseUrl) {
+      // OpenRouter / 互換エンドポイントは /v1/models で全件を返すことが多いため直接取得
+      const normalized = baseUrl.replace(/\/+$/, "");
+      const endpoint = normalized.endsWith("/v1")
+        ? `${normalized}/models`
+        : `${normalized}/v1/models`;
+
+      const res = await fetch(endpoint, {
+        headers: {
+          "x-api-key": apiKey,
+          Authorization: `Bearer ${apiKey}`,
+          "anthropic-version": "2023-06-01",
+        },
+      });
+
+      if (res.ok) {
+        const json = (await res.json()) as { data?: RawModelEntry[] };
+        if (Array.isArray(json.data)) {
+          for (const m of json.data) {
+            if (!m?.id) continue;
+            collected.push({
+              id: m.id,
+              displayName: m.display_name || m.name || m.id,
+            });
+          }
+        }
+      }
+    }
+
+    if (collected.length === 0) {
+      const client = new Anthropic({
+        apiKey,
+        baseURL: baseUrl || undefined,
+      });
+      const list = await client.models.list({ limit: 1000 });
+      for (const m of list.data) {
+        collected.push({
+          id: m.id,
+          displayName: m.display_name || m.id,
+        });
+      }
+    }
+
+    collected.sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, "en", {
+        sensitivity: "base",
+        numeric: true,
+      })
+    );
+
+    return NextResponse.json({ models: collected });
   } catch {
     return NextResponse.json({ models: [] });
   }
