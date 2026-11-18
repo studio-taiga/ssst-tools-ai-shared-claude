@@ -36,6 +36,7 @@ export interface PublicConnection {
   scope: ConnectionScope;
   teamId: string | null;
   hasCustomApiKey: boolean;
+  hasOauthToken: boolean;
   cliConfigDir: string | null;
   isActive: boolean;
   isDefault: boolean;

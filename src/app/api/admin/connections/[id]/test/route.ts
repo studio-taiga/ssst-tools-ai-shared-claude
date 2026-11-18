@@ -1,7 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { resolveClaudeBinary } from "@/lib/claude-runner";
 import { decryptText } from "@/lib/crypto";
 import { ClaudeConnectionRow, COL } from "@/lib/db";
 import { getFirestoreDb } from "@/lib/firebase";
@@ -62,14 +66,28 @@ export async function POST(
 
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
+  if (conn.oauth_token_encrypted) {
+    const token = await decryptText(conn.oauth_token_encrypted);
+    if (token) {
+      env.CLAUDE_CODE_OAUTH_TOKEN = token;
+    }
+  }
   if (conn.cli_config_dir?.trim()) {
     env.CLAUDE_CONFIG_DIR = conn.cli_config_dir.trim();
+  } else if (env.CLAUDE_CODE_OAUTH_TOKEN) {
+    const tmpConfig = path.join(os.tmpdir(), "shared-claude-cli");
+    if (!fs.existsSync(tmpConfig)) {
+      fs.mkdirSync(tmpConfig, { recursive: true });
+    }
+    env.CLAUDE_CONFIG_DIR = tmpConfig;
   }
+
+  const claudeBin = resolveClaudeBinary();
 
   const result = await new Promise<{ ok: boolean; message: string }>(
     (resolve) => {
       const child = spawn(
-        "claude",
+        claudeBin,
         [
           "-p",
           "Reply with only OK",

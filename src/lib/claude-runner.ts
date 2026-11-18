@@ -1,5 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { decryptText } from "./crypto";
 import {
   ClaudeConnectionRow,
@@ -213,6 +216,19 @@ async function runAnthropicApi(params: {
   });
 }
 
+export function resolveClaudeBinary(): string {
+  const localBin = path.join(
+    process.cwd(),
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "claude.cmd" : "claude"
+  );
+  if (fs.existsSync(localBin)) {
+    return localBin;
+  }
+  return "claude";
+}
+
 async function runClaudeCli(params: {
   connection: ClaudeConnectionRow;
   model: string;
@@ -224,8 +240,23 @@ async function runClaudeCli(params: {
   const env: NodeJS.ProcessEnv = { ...process.env };
   // サブスクリプション（OAuth）認証を優先させるため APIキー環境変数を除去
   delete env.ANTHROPIC_API_KEY;
+
+  if (params.connection.oauth_token_encrypted) {
+    const token = await decryptText(params.connection.oauth_token_encrypted);
+    if (token) {
+      env.CLAUDE_CODE_OAUTH_TOKEN = token;
+    }
+  }
+
   if (params.connection.cli_config_dir?.trim()) {
     env.CLAUDE_CONFIG_DIR = params.connection.cli_config_dir.trim();
+  } else if (env.CLAUDE_CODE_OAUTH_TOKEN) {
+    // サーバーレス環境でも書き込み可能な /tmp 配下を設定ディレクトリに使う
+    const tmpConfig = path.join(os.tmpdir(), "shared-claude-cli");
+    if (!fs.existsSync(tmpConfig)) {
+      fs.mkdirSync(tmpConfig, { recursive: true });
+    }
+    env.CLAUDE_CONFIG_DIR = tmpConfig;
   }
 
   const args = [
@@ -252,9 +283,10 @@ async function runClaudeCli(params: {
   }
 
   const promptInput = buildCliPrompt(params.history, inlineSystem);
+  const claudeBin = resolveClaudeBinary();
 
   await new Promise<void>((resolve, reject) => {
-    const child = spawn("claude", args, {
+    const child = spawn(claudeBin, args, {
       env,
       stdio: ["pipe", "pipe", "pipe"],
     });

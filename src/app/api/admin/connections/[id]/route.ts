@@ -40,6 +40,7 @@ export async function PATCH(
   const body = (await req.json()) as {
     name?: string;
     apiKey?: string;
+    oauthToken?: string;
     cliConfigDir?: string | null;
     isActive?: boolean;
     isDefault?: boolean;
@@ -48,6 +49,11 @@ export async function PATCH(
   let encryptedKey = existing.api_key_encrypted;
   if (typeof body.apiKey === "string" && body.apiKey.trim()) {
     encryptedKey = await encryptText(body.apiKey.trim());
+  }
+
+  let encryptedOauthToken = existing.oauth_token_encrypted ?? null;
+  if (typeof body.oauthToken === "string" && body.oauthToken.trim()) {
+    encryptedOauthToken = await encryptText(body.oauthToken.trim());
   }
 
   const isDefault =
@@ -70,6 +76,7 @@ export async function PATCH(
         ? body.name.trim()
         : existing.name,
     api_key_encrypted: encryptedKey,
+    oauth_token_encrypted: encryptedOauthToken,
     cli_config_dir:
       body.cliConfigDir !== undefined
         ? body.cliConfigDir?.trim() || null

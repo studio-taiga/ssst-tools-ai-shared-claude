@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     scope?: ConnectionScope;
     teamId?: string | null;
     apiKey?: string;
+    oauthToken?: string;
     cliConfigDir?: string;
     isDefault?: boolean;
   };
@@ -99,6 +100,10 @@ export async function POST(req: NextRequest) {
     type === "anthropic_api" && body.apiKey?.trim()
       ? await encryptText(body.apiKey.trim())
       : null;
+  const encryptedOauthToken =
+    type === "claude_cli" && body.oauthToken?.trim()
+      ? await encryptText(body.oauthToken.trim())
+      : null;
   const cliDir =
     type === "claude_cli" && body.cliConfigDir?.trim()
       ? body.cliConfigDir.trim()
@@ -124,6 +129,7 @@ export async function POST(req: NextRequest) {
     scope,
     team_id: teamId,
     api_key_encrypted: encryptedKey,
+    oauth_token_encrypted: encryptedOauthToken,
     cli_config_dir: cliDir,
     is_active: true,
     is_default: isDefault,

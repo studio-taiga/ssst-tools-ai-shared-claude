@@ -23,6 +23,7 @@ export interface ClaudeConnectionRow {
   scope: ConnectionScope;
   team_id: string | null;
   api_key_encrypted: string | null;
+  oauth_token_encrypted: string | null;
   cli_config_dir: string | null;
   is_active: boolean;
   is_default: boolean;

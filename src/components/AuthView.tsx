@@ -24,6 +24,7 @@ export function AuthView({
   >("anthropic_api");
   const [connectionName, setConnectionName] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [oauthToken, setOauthToken] = useState("");
   const [cliConfigDir, setCliConfigDir] = useState("");
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [loading, setLoading] = useState(false);
@@ -44,6 +45,7 @@ export function AuthView({
             connectionType,
             connectionName,
             apiKey,
+            oauthToken,
             cliConfigDir,
           }
         : { username, password };
@@ -214,20 +216,38 @@ export function AuthView({
                   />
                 </div>
               ) : (
-                <div>
-                  <label className="block text-xs text-[#9e998e] mb-1">
-                    CLAUDE_CONFIG_DIR（デフォルト ~/.claude の場合は空欄）
-                  </label>
-                  <input
-                    type="text"
-                    value={cliConfigDir}
-                    onChange={(e) => setCliConfigDir(e.target.value)}
-                    placeholder="例: /Users/taiga/.claude-max"
-                    className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
-                  />
-                  <p className="mt-1 text-[11px] text-[#858077]">
-                    ※Firebase App Hosting 等のサーバーレス環境では「従量課金 (API)」を推奨します。
-                  </p>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs text-[#9e998e] mb-1">
+                      Claude OAuth トークン（CLAUDE_CODE_OAUTH_TOKEN）
+                    </label>
+                    <input
+                      type="password"
+                      value={oauthToken}
+                      onChange={(e) => setOauthToken(e.target.value)}
+                      placeholder="sk-ant-oat01-..."
+                      className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+                    />
+                    <p className="mt-1 text-[11px] text-[#858077]">
+                      手元の端末で1回だけ{" "}
+                      <code className="px-1 rounded bg-[#191817]">
+                        npx -y @anthropic-ai/claude-code setup-token
+                      </code>{" "}
+                      を実行して取得した長期トークンを貼り付けます（自宅PCの常時起動不要）。
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#9e998e] mb-1">
+                      CLAUDE_CONFIG_DIR（ローカルCLI認証を使う場合のみ・任意）
+                    </label>
+                    <input
+                      type="text"
+                      value={cliConfigDir}
+                      onChange={(e) => setCliConfigDir(e.target.value)}
+                      placeholder="通常は空欄"
+                      className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
+                    />
+                  </div>
                 </div>
               )}
             </div>

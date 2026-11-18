@@ -10,6 +10,7 @@ export interface PublicConnection {
   scope: "global" | "team";
   teamId: string | null;
   hasCustomApiKey: boolean;
+  hasOauthToken: boolean;
   cliConfigDir: string | null;
   isActive: boolean;
   isDefault: boolean;
@@ -24,6 +25,7 @@ export function toPublicConnection(row: ClaudeConnectionRow): PublicConnection {
     scope: row.scope ?? "global",
     teamId: row.team_id ?? null,
     hasCustomApiKey: Boolean(row.api_key_encrypted),
+    hasOauthToken: Boolean(row.oauth_token_encrypted),
     cliConfigDir: row.cli_config_dir,
     isActive: row.is_active,
     isDefault: row.is_default,

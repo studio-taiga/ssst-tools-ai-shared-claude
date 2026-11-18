@@ -75,6 +75,7 @@ export function AdminModal({
   );
   const [connTeamId, setConnTeamId] = useState<string>(currentTeamId ?? "");
   const [connApiKey, setConnApiKey] = useState("");
+  const [connOauthToken, setConnOauthToken] = useState("");
   const [connCliDir, setConnCliDir] = useState("");
   const [connDefault, setConnDefault] = useState(false);
 
@@ -305,6 +306,7 @@ export function AdminModal({
             ? connTeamId || null
             : currentTeamId,
         apiKey: connType === "anthropic_api" ? connApiKey : undefined,
+        oauthToken: connType === "claude_cli" ? connOauthToken : undefined,
         cliConfigDir: connType === "claude_cli" ? connCliDir : undefined,
         isDefault: isSystemAdmin ? connDefault : false,
       }),
@@ -316,6 +318,7 @@ export function AdminModal({
     }
     setConnName("");
     setConnApiKey("");
+    setConnOauthToken("");
     setConnCliDir("");
     setConnDefault(false);
     await loadData();
@@ -808,13 +811,29 @@ export function AdminModal({
                     className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                   />
                 ) : (
-                  <input
-                    type="text"
-                    value={connCliDir}
-                    onChange={(e) => setConnCliDir(e.target.value)}
-                    placeholder="CLAUDE_CONFIG_DIR（デフォルト ~/.claude の場合は空欄）"
-                    className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
-                  />
+                  <div className="space-y-2">
+                    <input
+                      type="password"
+                      value={connOauthToken}
+                      onChange={(e) => setConnOauthToken(e.target.value)}
+                      placeholder="sk-ant-oat01-...（CLAUDE_CODE_OAUTH_TOKEN: `claude setup-token` で発行）"
+                      className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
+                    />
+                    <input
+                      type="text"
+                      value={connCliDir}
+                      onChange={(e) => setConnCliDir(e.target.value)}
+                      placeholder="CLAUDE_CONFIG_DIR（OAuthトークンを使う場合は空欄でOK）"
+                      className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
+                    />
+                    <p className="text-[11px] text-[#858077]">
+                      ※手元の端末で{" "}
+                      <code className="px-1 rounded bg-[#22201e]">
+                        npx -y @anthropic-ai/claude-code setup-token
+                      </code>{" "}
+                      を1回実行して発行した長期トークン（約1年有効）を登録すると、自宅PCを起動し続けずにクラウドからプラン枠を利用できます。
+                    </p>
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between">
@@ -909,7 +928,11 @@ export function AdminModal({
 
                       <div className="text-[11px] text-[#858077]">
                         {c.type === "claude_cli"
-                          ? `設定ディレクトリ: ${c.cliConfigDir || "~/.claude (デフォルト)"}`
+                          ? c.hasOauthToken
+                            ? "認証: OAuth トークン (CLAUDE_CODE_OAUTH_TOKEN) 暗号化保存済み"
+                            : `設定ディレクトリ: ${
+                                c.cliConfigDir || "~/.claude (デフォルト)"
+                              }`
                           : `APIキー: ${
                               c.hasCustomApiKey
                                 ? "暗号化して保存済み"
