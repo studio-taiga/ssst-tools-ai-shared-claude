@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Building2,
   CheckCircle2,
   ChevronDown,
@@ -20,6 +21,7 @@ import {
   PublicConnection,
   PublicUser,
   TeamItem,
+  UsageMonthlyItem,
   UserRole,
 } from "@/types/app";
 
@@ -45,10 +47,15 @@ export function AdminModal({
   onConnectionsChanged,
 }: AdminModalProps) {
   const isSystemAdmin = currentUserRole === "system_admin";
-  const [tab, setTab] = useState<"users" | "teams" | "connections">("users");
+  const [tab, setTab] = useState<"users" | "teams" | "connections" | "usage">(
+    "users"
+  );
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [teams, setTeams] = useState<TeamItem[]>([]);
   const [connections, setConnections] = useState<PublicConnection[]>([]);
+  const [usageRecords, setUsageRecords] = useState<UsageMonthlyItem[]>([]);
+  const [usageMonths, setUsageMonths] = useState<string[]>([]);
+  const [selectedUsageMonth, setSelectedUsageMonth] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,15 +125,20 @@ export function AdminModal({
 
   const loadData = useCallback(async () => {
     try {
-      const [uRes, tRes, cRes] = await Promise.all([
+      const [uRes, tRes, cRes, usRes] = await Promise.all([
         fetch("/api/admin/users"),
         fetch("/api/admin/teams"),
         fetch("/api/admin/connections"),
+        fetch("/api/admin/usage"),
       ]);
       const uData = (await uRes.json()) as { users?: PublicUser[] };
       const tData = (await tRes.json()) as { teams?: TeamItem[] };
       const cData = (await cRes.json()) as {
         connections?: PublicConnection[];
+      };
+      const usData = (await usRes.json()) as {
+        records?: UsageMonthlyItem[];
+        months?: string[];
       };
       if (uData.users) setUsers(uData.users);
       if (tData.teams) {
@@ -139,6 +151,10 @@ export function AdminModal({
         }
       }
       if (cData.connections) setConnections(cData.connections);
+      if (usData.records) setUsageRecords(usData.records);
+      if (usData.months) {
+        setUsageMonths(usData.months);
+      }
     } catch {
       setError("管理データの取得に失敗しました。");
     } finally {
@@ -152,12 +168,14 @@ export function AdminModal({
       fetch("/api/admin/users").then((r) => r.json()),
       fetch("/api/admin/teams").then((r) => r.json()),
       fetch("/api/admin/connections").then((r) => r.json()),
+      fetch("/api/admin/usage").then((r) => r.json()),
     ])
       .then(
-        ([uData, tData, cData]: [
+        ([uData, tData, cData, usData]: [
           { users?: PublicUser[] },
           { teams?: TeamItem[] },
-          { connections?: PublicConnection[] }
+          { connections?: PublicConnection[] },
+          { records?: UsageMonthlyItem[]; months?: string[] }
         ]) => {
           if (!active) return;
           if (uData.users) setUsers(uData.users);
@@ -169,6 +187,13 @@ export function AdminModal({
             }
           }
           if (cData.connections) setConnections(cData.connections);
+          if (usData.records) setUsageRecords(usData.records);
+          if (usData.months) {
+            setUsageMonths(usData.months);
+            if (usData.months.length > 0) {
+              setSelectedUsageMonth(usData.months[0]);
+            }
+          }
         }
       )
       .catch(() => {
@@ -570,11 +595,11 @@ export function AdminModal({
           </button>
         </div>
 
-        <div className="flex gap-1 px-6 pt-3 border-b border-[#302d29] bg-[#1e1c1a]">
+        <div className="flex gap-1 px-6 pt-3 border-b border-[#302d29] bg-[#1e1c1a] overflow-x-auto shrink-0">
           <button
             type="button"
             onClick={() => setTab("users")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
               tab === "users"
                 ? "border-[#d97757] text-[#faf9f5]"
                 : "border-transparent text-[#9e998e] hover:text-[#eceae4]"
@@ -589,7 +614,7 @@ export function AdminModal({
           <button
             type="button"
             onClick={() => setTab("teams")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
               tab === "teams"
                 ? "border-[#d97757] text-[#faf9f5]"
                 : "border-transparent text-[#9e998e] hover:text-[#eceae4]"
@@ -604,7 +629,7 @@ export function AdminModal({
           <button
             type="button"
             onClick={() => setTab("connections")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
               tab === "connections"
                 ? "border-[#d97757] text-[#faf9f5]"
                 : "border-transparent text-[#9e998e] hover:text-[#eceae4]"
@@ -612,6 +637,19 @@ export function AdminModal({
           >
             <KeyRound className="w-4 h-4" />
             <span>Claude接続先 ({connections.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTab("usage")}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap cursor-pointer ${
+              tab === "usage"
+                ? "border-[#d97757] text-[#faf9f5]"
+                : "border-transparent text-[#9e998e] hover:text-[#eceae4]"
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>利用状況レポート</span>
           </button>
         </div>
 
@@ -1106,6 +1144,207 @@ export function AdminModal({
                 })}
               </div>
             </>
+          ) : tab === "usage" ? (
+            (() => {
+              const filtered =
+                selectedUsageMonth === "all"
+                  ? usageRecords
+                  : usageRecords.filter((r) => r.month === selectedUsageMonth);
+
+              // Aggregate by user_id
+              const byUser = new Map<
+                string,
+                {
+                  userId: string;
+                  inputTokens: number;
+                  outputTokens: number;
+                  totalTokens: number;
+                  cliTokens: number;
+                  apiCostUsd: number;
+                  models: Record<
+                    string,
+                    {
+                      input_tokens: number;
+                      output_tokens: number;
+                      cost_usd: number;
+                      connection_type: string;
+                    }
+                  >;
+                }
+              >();
+
+              let grandTotalTokens = 0;
+              let grandCliTokens = 0;
+              let grandApiCost = 0;
+
+              for (const rec of filtered) {
+                grandTotalTokens += rec.total_tokens;
+                grandCliTokens += rec.cli_tokens;
+                grandApiCost += rec.api_cost_usd;
+
+                const cur = byUser.get(rec.user_id) ?? {
+                  userId: rec.user_id,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  totalTokens: 0,
+                  cliTokens: 0,
+                  apiCostUsd: 0,
+                  models: {},
+                };
+                cur.inputTokens += rec.input_tokens;
+                cur.outputTokens += rec.output_tokens;
+                cur.totalTokens += rec.total_tokens;
+                cur.cliTokens += rec.cli_tokens;
+                cur.apiCostUsd += rec.api_cost_usd;
+
+                for (const [mKey, mVal] of Object.entries(rec.by_model ?? {})) {
+                  const prev = cur.models[mKey] ?? {
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cost_usd: 0,
+                    connection_type: mVal.connection_type,
+                  };
+                  cur.models[mKey] = {
+                    input_tokens: prev.input_tokens + mVal.input_tokens,
+                    output_tokens: prev.output_tokens + mVal.output_tokens,
+                    cost_usd: prev.cost_usd + mVal.cost_usd,
+                    connection_type: mVal.connection_type,
+                  };
+                }
+                byUser.set(rec.user_id, cur);
+              }
+
+              const rows = Array.from(byUser.values()).sort(
+                (a, b) => b.totalTokens - a.totalTokens
+              );
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-[#9e998e]">
+                      当月・過去の月ごとのユーザー別利用状況（モデル別単価に基づく概算 API 料金、プラン契約枠は $0）
+                    </div>
+                    <select
+                      value={selectedUsageMonth}
+                      onChange={(e) => setSelectedUsageMonth(e.target.value)}
+                      className="rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
+                    >
+                      <option value="all">全期間合計</option>
+                      {usageMonths.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-xl border border-[#302d29] bg-[#191817] p-3.5">
+                      <div className="text-[11px] text-[#858077]">総トークン</div>
+                      <div className="text-base font-semibold font-mono text-[#faf9f5] mt-1">
+                        {grandTotalTokens.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#302d29] bg-[#191817] p-3.5">
+                      <div className="text-[11px] text-[#858077]">
+                        プラン契約枠 (定額)
+                      </div>
+                      <div className="text-base font-semibold font-mono text-emerald-300 mt-1">
+                        {grandCliTokens.toLocaleString()} tok
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#302d29] bg-[#191817] p-3.5">
+                      <div className="text-[11px] text-[#858077]">
+                        API 概算料金合計
+                      </div>
+                      <div className="text-base font-semibold font-mono text-[#f3c6b6] mt-1">
+                        ${grandApiCost.toFixed(4)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {rows.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-[#35322e] py-10 text-center text-xs text-[#858077]">
+                      この期間の利用データはまだありません
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {rows.map((r) => {
+                        const uInfo = users.find((u) => u.id === r.userId);
+                        const modelEntries = Object.entries(r.models);
+                        return (
+                          <div
+                            key={r.userId}
+                            className="rounded-xl border border-[#302d29] bg-[#191817] p-4 space-y-2"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-[#faf9f5]">
+                                  {uInfo?.displayName || r.userId}
+                                </span>
+                                {uInfo && (
+                                  <span className="text-xs font-mono text-[#858077]">
+                                    @{uInfo.username}
+                                  </span>
+                                )}
+                                {uInfo?.teamName && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#252320] text-[#b7b3aa]">
+                                    {uInfo.teamName}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs">
+                                <span className="font-mono text-[#b7b3aa]">
+                                  {r.totalTokens.toLocaleString()} tok
+                                </span>
+                                <span className="px-2 py-0.5 rounded bg-[#d97757]/15 text-[#f3c6b6] font-mono">
+                                  API: ${r.apiCostUsd.toFixed(4)}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] text-[#858077] flex flex-wrap gap-x-4 gap-y-1">
+                              <span>入力: {r.inputTokens.toLocaleString()}</span>
+                              <span>出力: {r.outputTokens.toLocaleString()}</span>
+                              <span>
+                                プラン枠: {r.cliTokens.toLocaleString()} tok
+                              </span>
+                            </div>
+
+                            {modelEntries.length > 0 && (
+                              <div className="pt-2 border-t border-[#2a2825] space-y-1">
+                                {modelEntries.map(([mKey, mVal]) => {
+                                  const mName = mKey.split("__")[0];
+                                  return (
+                                    <div
+                                      key={mKey}
+                                      className="flex items-center justify-between text-[11px] text-[#9e998e]"
+                                    >
+                                      <span className="truncate max-w-[260px]">
+                                        {mName} (
+                                        {mVal.connection_type === "claude_cli"
+                                          ? "プラン"
+                                          : "API"}
+                                        )
+                                      </span>
+                                      <span className="font-mono">
+                                        in {mVal.input_tokens.toLocaleString()} /
+                                        out {mVal.output_tokens.toLocaleString()}{" "}
+                                        (${mVal.cost_usd.toFixed(4)})
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <>
               <form

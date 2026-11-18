@@ -1,5 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "./firebase";
+import { calculateEstimatedCostUsd } from "./pricing";
 
 export type ConnectionType = "anthropic_api" | "claude_cli";
 export type ConnectionScope = "global" | "team";
@@ -104,6 +105,27 @@ export interface MessageRow {
   created_at: string;
 }
 
+export interface UsageModelBreakdown {
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  connection_type: string;
+}
+
+export interface UsageMonthlyRow {
+  id: string; // `${user_id}_${month}`
+  user_id: string;
+  team_id: string | null;
+  month: string; // YYYY-MM
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cli_tokens: number;
+  api_cost_usd: number;
+  by_model: Record<string, UsageModelBreakdown>;
+  updated_at: string;
+}
+
 export const COL = {
   TEAMS: "teams",
   USERS: "users",
@@ -112,6 +134,7 @@ export const COL = {
   PROJECT_FILES: "project_files",
   CONVERSATIONS: "conversations",
   MESSAGES: "messages",
+  USAGE_MONTHLY: "usage_monthly",
 } as const;
 
 export function nowIso(): string {
@@ -139,11 +162,22 @@ export function getEffectiveMonthlyTokens(row: {
 export async function recordTokenUsage(params: {
   userId: string;
   teamId: string | null;
-  tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  connectionType: string;
 }): Promise<void> {
-  if (params.tokens <= 0) return;
+  const totalTokens = params.inputTokens + params.outputTokens;
+  if (totalTokens <= 0) return;
+
   const db = getFirestoreDb();
   const month = currentMonthKey();
+  const costUsd = calculateEstimatedCostUsd({
+    model: params.model,
+    inputTokens: params.inputTokens,
+    outputTokens: params.outputTokens,
+    connectionType: params.connectionType,
+  });
 
   const userRef = db.collection(COL.USERS).doc(params.userId);
   await db.runTransaction(async (tx) => {
@@ -152,12 +186,12 @@ export async function recordTokenUsage(params: {
     const data = snap.data() as UserRow;
     if (data.usage_month === month) {
       tx.update(userRef, {
-        usage_tokens: FieldValue.increment(params.tokens),
+        usage_tokens: FieldValue.increment(totalTokens),
       });
     } else {
       tx.update(userRef, {
         usage_month: month,
-        usage_tokens: params.tokens,
+        usage_tokens: totalTokens,
       });
     }
   });
@@ -170,14 +204,73 @@ export async function recordTokenUsage(params: {
       const data = snap.data() as TeamRow;
       if (data.usage_month === month) {
         tx.update(teamRef, {
-          usage_tokens: FieldValue.increment(params.tokens),
+          usage_tokens: FieldValue.increment(totalTokens),
         });
       } else {
         tx.update(teamRef, {
           usage_month: month,
-          usage_tokens: params.tokens,
+          usage_tokens: totalTokens,
         });
       }
     });
   }
+
+  // 月別・モデル別の詳細利用履歴を更新
+  const usageId = `${params.userId}_${month}`;
+  const usageRef = db.collection(COL.USAGE_MONTHLY).doc(usageId);
+  const safeModelKey = `${params.model}__${params.connectionType}`.replace(
+    /[./~$[\]]/g,
+    "_"
+  );
+  const cliDelta = params.connectionType === "claude_cli" ? totalTokens : 0;
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(usageRef);
+    if (!snap.exists) {
+      const doc: UsageMonthlyRow = {
+        id: usageId,
+        user_id: params.userId,
+        team_id: params.teamId,
+        month,
+        input_tokens: params.inputTokens,
+        output_tokens: params.outputTokens,
+        total_tokens: totalTokens,
+        cli_tokens: cliDelta,
+        api_cost_usd: costUsd,
+        by_model: {
+          [safeModelKey]: {
+            input_tokens: params.inputTokens,
+            output_tokens: params.outputTokens,
+            cost_usd: costUsd,
+            connection_type: params.connectionType,
+          },
+        },
+        updated_at: nowIso(),
+      };
+      tx.set(usageRef, doc);
+    } else {
+      const existing = snap.data() as UsageMonthlyRow;
+      const prevModel = existing.by_model?.[safeModelKey] ?? {
+        input_tokens: 0,
+        output_tokens: 0,
+        cost_usd: 0,
+        connection_type: params.connectionType,
+      };
+      tx.update(usageRef, {
+        team_id: params.teamId,
+        input_tokens: FieldValue.increment(params.inputTokens),
+        output_tokens: FieldValue.increment(params.outputTokens),
+        total_tokens: FieldValue.increment(totalTokens),
+        cli_tokens: FieldValue.increment(cliDelta),
+        api_cost_usd: Number(((existing.api_cost_usd ?? 0) + costUsd).toFixed(6)),
+        [`by_model.${safeModelKey}`]: {
+          input_tokens: prevModel.input_tokens + params.inputTokens,
+          output_tokens: prevModel.output_tokens + params.outputTokens,
+          cost_usd: Number((prevModel.cost_usd + costUsd).toFixed(6)),
+          connection_type: params.connectionType,
+        },
+        updated_at: nowIso(),
+      });
+    }
+  });
 }

@@ -313,7 +313,10 @@ export async function POST(
               recordTokenUsage({
                 userId: user.id,
                 teamId: user.team_id,
-                tokens: usage.inputTokens + usage.outputTokens,
+                inputTokens: usage.inputTokens,
+                outputTokens: usage.outputTokens,
+                model,
+                connectionType: connection.type,
               }),
             ])
               .then(() => {

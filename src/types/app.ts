@@ -100,3 +100,24 @@ export interface MessageItem {
   connection_type: string | null;
   created_at: string;
 }
+
+export interface UsageModelBreakdown {
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  connection_type: string;
+}
+
+export interface UsageMonthlyItem {
+  id: string;
+  user_id: string;
+  team_id: string | null;
+  month: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cli_tokens: number;
+  api_cost_usd: number;
+  by_model: Record<string, UsageModelBreakdown>;
+  updated_at: string;
+}
