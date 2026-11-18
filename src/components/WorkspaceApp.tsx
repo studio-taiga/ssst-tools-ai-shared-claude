@@ -29,7 +29,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CLAUDE_MODELS, RESPONSE_STYLES } from "@/lib/models";
+import { RESPONSE_STYLES } from "@/lib/models";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import {
   ConversationItem,
@@ -46,6 +46,7 @@ import {
   extractArtifacts,
 } from "./ArtifactPanel";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { ModelPicker, RemoteModelOption } from "./ModelPicker";
 import { ProfileModal } from "./ProfileModal";
 import { ProjectModal } from "./ProjectModal";
 
@@ -76,11 +77,7 @@ export function WorkspaceApp({
   const [selectedConnectionId, setSelectedConnectionId] = useState<string>(
     initialUser.defaultConnectionId ?? ""
   );
-  const [remoteModels, setRemoteModels] = useState<
-    Array<{ id: string; displayName: string }>
-  >([]);
-  const [customModelMode, setCustomModelMode] = useState(false);
-  const [customModelDraft, setCustomModelDraft] = useState("");
+  const [remoteModels, setRemoteModels] = useState<RemoteModelOption[]>([]);
   const [draftProjectId, setDraftProjectId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
@@ -197,13 +194,11 @@ export function WorkspaceApp({
     let active = true;
     fetch(`/api/connections/${effectiveConn.id}/models`)
       .then((res) => (res.ok ? res.json() : null))
-      .then(
-        (data: { models?: Array<{ id: string; displayName: string }> } | null) => {
-          if (active && data?.models) {
-            setRemoteModels(data.models);
-          }
+      .then((data: { models?: RemoteModelOption[] } | null) => {
+        if (active && data?.models) {
+          setRemoteModels(data.models);
         }
-      )
+      })
       .catch(() => {
         if (active) setRemoteModels([]);
       });
@@ -1071,119 +1066,6 @@ export function WorkspaceApp({
               <Menu className="w-5 h-5" />
             </button>
 
-            {customModelMode ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const val = customModelDraft.trim();
-                  if (val) {
-                    void handleUpdateConversationMeta({ model: val });
-                  }
-                  setCustomModelMode(false);
-                }}
-                className="flex items-center gap-1 flex-1 min-w-0"
-              >
-                <input
-                  type="text"
-                  autoFocus
-                  value={customModelDraft}
-                  onChange={(e) => setCustomModelDraft(e.target.value)}
-                  placeholder="モデルID (例: openrouter/free)"
-                  className="rounded-lg bg-[#22201e] border border-[#d97757] px-2.5 py-1 text-base sm:text-xs text-[#eceae4] focus:outline-none flex-1 min-w-0 sm:w-52"
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-[#d97757] px-2.5 py-1.5 sm:py-1 text-xs text-white shrink-0 cursor-pointer"
-                >
-                  決定
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCustomModelMode(false)}
-                  className="rounded-lg border border-[#35322e] px-2 py-1.5 sm:py-1 text-xs text-[#9e998e] shrink-0 cursor-pointer"
-                >
-                  戻る
-                </button>
-              </form>
-            ) : (
-              <select
-                value={selectedModel}
-                onChange={(e) => {
-                  if (e.target.value === "__custom__") {
-                    setCustomModelDraft(selectedModel);
-                    setCustomModelMode(true);
-                    return;
-                  }
-                  void handleUpdateConversationMeta({ model: e.target.value });
-                }}
-                className="rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] flex-1 sm:flex-initial min-w-0 max-w-full sm:max-w-[220px] truncate"
-                title="モデル選択"
-              >
-                {(() => {
-                  const customIds = [
-                    effectiveConn?.defaultModelOverride,
-                    selectedModel,
-                  ].filter(
-                    (id): id is string =>
-                      Boolean(id) &&
-                      !CLAUDE_MODELS.some((m) => m.id === id) &&
-                      !availableRemoteModels.some((rm) => rm.id === id)
-                  );
-                  const uniqueCustomIds = Array.from(new Set(customIds));
-                  return (
-                    <>
-                      {uniqueCustomIds.map((id) => (
-                        <option key={id} value={id}>
-                          {id} (カスタム)
-                        </option>
-                      ))}
-                      {(() => {
-                        const freeModels = availableRemoteModels.filter((rm) =>
-                          rm.id.endsWith(":free")
-                        );
-                        return (
-                          <>
-                            {freeModels.length > 0 && (
-                              <optgroup
-                                label={`無料モデル :free (${freeModels.length}件)`}
-                              >
-                                {freeModels.map((rm) => (
-                                  <option key={`free-${rm.id}`} value={rm.id}>
-                                    {rm.displayName}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {availableRemoteModels.length > 0 && (
-                              <optgroup
-                                label={`接続先の利用可能モデル (${availableRemoteModels.length}件・名前順)`}
-                              >
-                                {availableRemoteModels.map((rm) => (
-                                  <option key={rm.id} value={rm.id}>
-                                    {rm.displayName}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </>
-                        );
-                      })()}
-                      <optgroup label="Claude 標準モデル">
-                        {CLAUDE_MODELS.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <option value="__custom__">
-                        ✏️ カスタムモデル ID を入力...
-                      </option>
-                    </>
-                  );
-                })()}
-              </select>
-            )}
-
             <select
               value={selectedConnectionId}
               onChange={(e) =>
@@ -1191,7 +1073,7 @@ export function WorkspaceApp({
                   connectionId: e.target.value || null,
                 })
               }
-              className="hidden sm:block rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[190px]"
+              className="rounded-lg bg-[#22201e] border border-[#35322e] px-2 sm:px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[140px] sm:max-w-[190px] truncate"
               title="Claude接続先（API / プラン契約）"
             >
               <option value="">接続先: 標準</option>
@@ -1202,27 +1084,19 @@ export function WorkspaceApp({
                 </option>
               ))}
             </select>
+
+            <ModelPicker
+              selectedModel={selectedModel}
+              remoteModels={availableRemoteModels}
+              defaultModelOverride={effectiveConn?.defaultModelOverride}
+              showPricing={effectiveConn?.type === "anthropic_api"}
+              onSelect={(modelId) => {
+                void handleUpdateConversationMeta({ model: modelId });
+              }}
+            />
           </div>
 
           <div className="flex items-center gap-2 min-w-0">
-            <select
-              value={selectedConnectionId}
-              onChange={(e) =>
-                handleUpdateConversationMeta({
-                  connectionId: e.target.value || null,
-                })
-              }
-              className="sm:hidden rounded-lg bg-[#22201e] border border-[#35322e] px-2 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] flex-1 min-w-0 truncate"
-              title="Claude接続先（API / プラン契約）"
-            >
-              <option value="">接続先: 標準</option>
-              {connections.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.type === "claude_cli" ? "📋 " : "🔑 "}
-                  {c.name}
-                </option>
-              ))}
-            </select>
             <select
               value={draftProjectId ?? ""}
               onChange={(e) =>

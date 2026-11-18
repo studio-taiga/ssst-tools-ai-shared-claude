@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirestoreDb } from "./firebase";
-import { calculateEstimatedCostUsd } from "./pricing";
+import { calculateEstimatedCostUsd, ModelPricing } from "./pricing";
 
 export type ConnectionType = "anthropic_api" | "claude_cli";
 export type ConnectionScope = "global" | "team";
@@ -166,6 +166,7 @@ export async function recordTokenUsage(params: {
   outputTokens: number;
   model: string;
   connectionType: string;
+  pricingOverride?: ModelPricing;
 }): Promise<void> {
   const totalTokens = params.inputTokens + params.outputTokens;
   if (totalTokens <= 0) return;
@@ -177,6 +178,7 @@ export async function recordTokenUsage(params: {
     inputTokens: params.inputTokens,
     outputTokens: params.outputTokens,
     connectionType: params.connectionType,
+    pricingOverride: params.pricingOverride,
   });
 
   const userRef = db.collection(COL.USERS).doc(params.userId);

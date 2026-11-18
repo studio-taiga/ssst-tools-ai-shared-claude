@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { buildSystemPrompt, streamClaudeResponse } from "@/lib/claude-runner";
+import { decryptText } from "@/lib/crypto";
 import {
   ClaudeConnectionRow,
   COL,
@@ -16,6 +17,7 @@ import {
   TeamRow,
 } from "@/lib/db";
 import { getFirestoreDb } from "@/lib/firebase";
+import { fetchConnectionModels, ModelPricing } from "@/lib/pricing";
 
 async function resolveConnection(
   conversationConnId: string | null,
@@ -307,18 +309,44 @@ export async function POST(
               created_at: finishedAt,
             };
 
-            void Promise.all([
-              db.collection(COL.MESSAGES).doc(assistantId).set(assistantDoc),
-              convRef.update({ updated_at: finishedAt }),
-              recordTokenUsage({
-                userId: user.id,
-                teamId: user.team_id,
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                model,
-                connectionType: connection.type,
-              }),
-            ])
+            const resolvePricing = async (): Promise<
+              ModelPricing | undefined
+            > => {
+              if (connection.type !== "anthropic_api" || !connection.base_url) {
+                return undefined;
+              }
+              try {
+                const key = connection.api_key_encrypted
+                  ? await decryptText(connection.api_key_encrypted)
+                  : process.env.ANTHROPIC_API_KEY;
+                if (!key) return undefined;
+                const list = await fetchConnectionModels({
+                  connectionId: connection.id,
+                  apiKey: key,
+                  baseUrl: connection.base_url,
+                });
+                return list.find((m) => m.id === model)?.pricing;
+              } catch {
+                return undefined;
+              }
+            };
+
+            void resolvePricing()
+              .then((pricingOverride) =>
+                Promise.all([
+                  db.collection(COL.MESSAGES).doc(assistantId).set(assistantDoc),
+                  convRef.update({ updated_at: finishedAt }),
+                  recordTokenUsage({
+                    userId: user.id,
+                    teamId: user.team_id,
+                    inputTokens: usage.inputTokens,
+                    outputTokens: usage.outputTokens,
+                    model,
+                    connectionType: connection.type,
+                    pricingOverride,
+                  }),
+                ])
+              )
               .then(() => {
                 sendEvent("done", {
                   assistantMessageId: assistantId,
