@@ -5,26 +5,22 @@ import { buildSystemPrompt, streamClaudeResponse } from "@/lib/claude-runner";
 import { decryptText } from "@/lib/crypto";
 import {
   ClaudeConnectionRow,
-  COL,
-  ConversationRow,
   getEffectiveMonthlyTokens,
   MessageAttachment,
   MessageRow,
   nowIso,
   ProjectFileRow,
   ProjectRow,
-  recordTokenUsage,
-  TeamRow,
 } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
 import { fetchConnectionModels, ModelPricing } from "@/lib/pricing";
+import { getStore } from "@/lib/store";
 
 async function resolveConnection(
   conversationConnId: string | null,
   userDefaultConnId: string | null,
   userTeamId: string | null
 ): Promise<ClaudeConnectionRow | null> {
-  const db = getFirestoreDb();
+  const store = getStore();
   const candidateIds = [conversationConnId, userDefaultConnId].filter(
     Boolean
   ) as string[];
@@ -35,25 +31,15 @@ async function resolveConnection(
       (c.scope === "team" && userTeamId !== null && c.team_id === userTeamId));
 
   for (const cid of candidateIds) {
-    const snap = await db.collection(COL.CONNECTIONS).doc(cid).get();
-    if (snap.exists) {
-      const c = snap.data() as ClaudeConnectionRow;
-      if (isAllowed(c)) return c;
-    }
+    const c = await store.getConnection(cid);
+    if (c && isAllowed(c)) return c;
   }
 
-  const allActiveSnap = await db
-    .collection(COL.CONNECTIONS)
-    .where("is_active", "==", true)
-    .get();
-
-  const allowed = allActiveSnap.docs
-    .map((d) => d.data() as ClaudeConnectionRow)
-    .filter(isAllowed)
-    .sort((a, b) => {
-      if (a.is_default !== b.is_default) return a.is_default ? -1 : 1;
-      return a.created_at.localeCompare(b.created_at);
-    });
+  const allActive = await store.listConnections(true);
+  const allowed = allActive.filter(isAllowed).sort((a, b) => {
+    if (a.is_default !== b.is_default) return a.is_default ? -1 : 1;
+    return a.created_at.localeCompare(b.created_at);
+  });
 
   return allowed[0] ?? null;
 }
@@ -68,19 +54,12 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const convRef = db.collection(COL.CONVERSATIONS).doc(id);
-  const convSnap = await convRef.get();
-  if (!convSnap.exists) {
+  const store = getStore();
+  const conversation = await store.getConversation(id);
+  if (!conversation || conversation.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const conversation = convSnap.data() as ConversationRow;
-  if (conversation.user_id !== user.id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  // User monthly token limit check
   if (user.monthly_token_limit !== null) {
     const used = getEffectiveMonthlyTokens(user);
     if (used >= user.monthly_token_limit) {
@@ -93,11 +72,9 @@ export async function POST(
     }
   }
 
-  // Team monthly token limit check
   if (user.team_id) {
-    const teamSnap = await db.collection(COL.TEAMS).doc(user.team_id).get();
-    if (teamSnap.exists) {
-      const team = teamSnap.data() as TeamRow;
+    const team = await store.getTeam(user.team_id);
+    if (team) {
       if (!team.is_active) {
         return NextResponse.json(
           { error: "所属チームが無効化されています。" },
@@ -165,20 +142,7 @@ export async function POST(
   const now = nowIso();
 
   if (body.truncateFromMessageId) {
-    const existingSnap = await db
-      .collection(COL.MESSAGES)
-      .where("conversation_id", "==", id)
-      .orderBy("created_at", "asc")
-      .get();
-    const docs = existingSnap.docs;
-    const idx = docs.findIndex((d) => d.id === body.truncateFromMessageId);
-    if (idx !== -1) {
-      const batch = db.batch();
-      for (let i = idx; i < docs.length; i++) {
-        batch.delete(docs[i].ref);
-      }
-      await batch.commit();
-    }
+    await store.deleteMessagesFrom(id, body.truncateFromMessageId);
   }
 
   let userMsgId = body.truncateFromMessageId || crypto.randomUUID();
@@ -200,7 +164,7 @@ export async function POST(
       connection_type: null,
       created_at: now,
     };
-    await db.collection(COL.MESSAGES).doc(userMsgId).set(userMsgDoc);
+    await store.createMessage(userMsgDoc);
   }
 
   let updatedTitle = conversation.title;
@@ -208,7 +172,7 @@ export async function POST(
     updatedTitle = content.replace(/\s+/g, " ").slice(0, 36);
   }
 
-  await convRef.update({
+  await store.updateConversation(id, {
     title: updatedTitle,
     model,
     connection_id: connection.id,
@@ -218,33 +182,14 @@ export async function POST(
   let project: ProjectRow | null = null;
   let projectFiles: ProjectFileRow[] = [];
   if (conversation.project_id) {
-    const projSnap = await db
-      .collection(COL.PROJECTS)
-      .doc(conversation.project_id)
-      .get();
-    if (projSnap.exists) {
-      const p = projSnap.data() as ProjectRow;
-      if (p.user_id === user.id) {
-        project = p;
-        const filesSnap = await db
-          .collection(COL.PROJECT_FILES)
-          .where("project_id", "==", project.id)
-          .where("user_id", "==", user.id)
-          .orderBy("created_at", "desc")
-          .get();
-        projectFiles = filesSnap.docs
-          .map((d) => d.data() as ProjectFileRow)
-          .reverse();
-      }
+    const p = await store.getProject(conversation.project_id);
+    if (p && p.user_id === user.id) {
+      project = p;
+      projectFiles = (await store.listProjectFiles(project.id, user.id)).reverse();
     }
   }
 
-  const historySnap = await db
-    .collection(COL.MESSAGES)
-    .where("conversation_id", "==", id)
-    .orderBy("created_at", "asc")
-    .get();
-  const history = historySnap.docs.map((d) => d.data() as MessageRow);
+  const history = await store.listMessages(id);
 
   const systemPrompt = buildSystemPrompt({
     user,
@@ -334,9 +279,9 @@ export async function POST(
             void resolvePricing()
               .then((pricingOverride) =>
                 Promise.all([
-                  db.collection(COL.MESSAGES).doc(assistantId).set(assistantDoc),
-                  convRef.update({ updated_at: finishedAt }),
-                  recordTokenUsage({
+                  store.createMessage(assistantDoc),
+                  store.updateConversation(id, { updated_at: finishedAt }),
+                  store.recordTokenUsage({
                     userId: user.id,
                     teamId: user.team_id,
                     inputTokens: usage.inputTokens,

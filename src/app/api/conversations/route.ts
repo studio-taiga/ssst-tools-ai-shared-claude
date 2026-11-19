@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, ConversationRow, nowIso, ProjectRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { ConversationRow, nowIso } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -11,26 +11,14 @@ export async function GET(req: NextRequest) {
   }
 
   const projectId = req.nextUrl.searchParams.get("projectId");
-  const db = getFirestoreDb();
+  const store = getStore();
+  const [rows, projects] = await Promise.all([
+    store.listConversations(user.id, projectId),
+    store.listProjects(user.id),
+  ]);
 
-  let query = db
-    .collection(COL.CONVERSATIONS)
-    .where("user_id", "==", user.id);
-
-  if (projectId) {
-    query = query.where("project_id", "==", projectId);
-  }
-
-  const snap = await query.orderBy("updated_at", "desc").get();
-  const rows = snap.docs.map((d) => d.data() as ConversationRow);
-
-  const projectsSnap = await db
-    .collection(COL.PROJECTS)
-    .where("user_id", "==", user.id)
-    .get();
   const projectMap = new Map<string, string>();
-  for (const doc of projectsSnap.docs) {
-    const p = doc.data() as ProjectRow;
+  for (const p of projects) {
     projectMap.set(p.id, p.name);
   }
 
@@ -61,22 +49,12 @@ export async function POST(req: NextRequest) {
     model?: string;
   };
 
-  const db = getFirestoreDb();
+  const store = getStore();
   let projectName: string | null = null;
 
   if (body.projectId) {
-    const projSnap = await db
-      .collection(COL.PROJECTS)
-      .doc(body.projectId)
-      .get();
-    if (!projSnap.exists) {
-      return NextResponse.json(
-        { error: "指定されたプロジェクトが見つかりません。" },
-        { status: 404 }
-      );
-    }
-    const proj = projSnap.data() as ProjectRow;
-    if (proj.user_id !== user.id) {
+    const proj = await store.getProject(body.projectId);
+    if (!proj || proj.user_id !== user.id) {
       return NextResponse.json(
         { error: "指定されたプロジェクトが見つかりません。" },
         { status: 404 }
@@ -106,7 +84,7 @@ export async function POST(req: NextRequest) {
     updated_at: now,
   };
 
-  await db.collection(COL.CONVERSATIONS).doc(id).set(convDoc);
+  await store.createConversation(convDoc);
 
   return NextResponse.json(
     { conversation: { ...convDoc, project_name: projectName } },

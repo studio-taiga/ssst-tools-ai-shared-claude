@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { decryptText } from "@/lib/crypto";
-import { ClaudeConnectionRow, COL } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
 import { fetchConnectionModels } from "@/lib/pricing";
+import { getStore } from "@/lib/store";
 
 export async function GET(
   _req: NextRequest,
@@ -15,13 +14,11 @@ export async function GET(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const snap = await db.collection(COL.CONNECTIONS).doc(id).get();
-  if (!snap.exists) {
+  const conn = await getStore().getConnection(id);
+  if (!conn) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const conn = snap.data() as ClaudeConnectionRow;
   if (
     !conn.is_active ||
     (conn.scope === "team" && conn.team_id !== user.team_id)

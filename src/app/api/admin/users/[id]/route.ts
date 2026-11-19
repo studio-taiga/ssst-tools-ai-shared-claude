@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, toPublicUser } from "@/lib/auth";
 import { hashPassword } from "@/lib/crypto";
-import { COL, UserRole, UserRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { UserRole } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function PATCH(
   req: NextRequest,
@@ -17,17 +17,13 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.USERS).doc(id);
-  const snap = await ref.get();
+  const store = getStore();
+  const target = await store.getUser(id);
 
-  if (!snap.exists) {
+  if (!target) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const target = snap.data() as UserRow;
-
-  // team_admin 境界チェック
   if (current.role === "team_admin") {
     if (target.team_id !== current.team_id || target.role !== "member") {
       return NextResponse.json(
@@ -63,12 +59,8 @@ export async function PATCH(
       );
     }
     if (normalized !== target.username) {
-      const dup = await db
-        .collection(COL.USERS)
-        .where("username", "==", normalized)
-        .limit(1)
-        .get();
-      if (!dup.empty) {
+      const dup = await store.getUserByUsername(normalized);
+      if (dup) {
         return NextResponse.json(
           { error: "このユーザー名は既に使用されています。" },
           { status: 409 }
@@ -117,7 +109,7 @@ export async function PATCH(
     passwordHash = hashPassword(body.password);
   }
 
-  await ref.update({
+  await store.updateUser(id, {
     username: nextUsername,
     display_name:
       typeof body.displayName === "string" && body.displayName.trim()
@@ -146,7 +138,7 @@ export async function PATCH(
       typeof body.isActive === "boolean" ? body.isActive : target.is_active,
   });
 
-  const updated = (await ref.get()).data() as UserRow;
+  const updated = (await store.getUser(id))!;
   return NextResponse.json({ user: await toPublicUser(updated) });
 }
 
@@ -170,14 +162,12 @@ export async function DELETE(
     );
   }
 
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.USERS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const store = getStore();
+  const target = await store.getUser(id);
+  if (!target) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const target = snap.data() as UserRow;
   if (
     current.role === "team_admin" &&
     (target.team_id !== current.team_id || target.role !== "member")
@@ -188,6 +178,6 @@ export async function DELETE(
     );
   }
 
-  await ref.delete();
+  await store.deleteUser(id);
   return NextResponse.json({ ok: true });
 }

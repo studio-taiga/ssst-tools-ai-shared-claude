@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { ClaudeConnectionRow, COL } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { ClaudeConnectionRow } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export interface PublicConnection {
   id: string;
@@ -45,14 +45,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getFirestoreDb();
-  const snap = await db
-    .collection(COL.CONNECTIONS)
-    .where("is_active", "==", true)
-    .get();
-
-  const rows = snap.docs
-    .map((d) => d.data() as ClaudeConnectionRow)
+  const allActive = await getStore().listConnections(true);
+  const rows = allActive
     .filter(
       (c) =>
         c.scope === "global" ||

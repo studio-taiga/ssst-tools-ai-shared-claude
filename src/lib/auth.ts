@@ -2,13 +2,11 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { signSessionToken, verifySessionToken } from "./crypto";
 import {
-  COL,
   getEffectiveMonthlyTokens,
-  TeamRow,
   UserRole,
   UserRow,
 } from "./db";
-import { getFirestoreDb } from "./firebase";
+import { getStore } from "./store";
 
 export const SESSION_COOKIE_NAME = "shared_claude_session";
 
@@ -34,10 +32,9 @@ export async function toPublicUser(
 ): Promise<PublicUser> {
   let resolvedTeamName = teamName ?? null;
   if (resolvedTeamName === null && row.team_id) {
-    const db = getFirestoreDb();
-    const teamSnap = await db.collection(COL.TEAMS).doc(row.team_id).get();
-    if (teamSnap.exists) {
-      resolvedTeamName = (teamSnap.data() as TeamRow).name;
+    const team = await getStore().getTeam(row.team_id);
+    if (team) {
+      resolvedTeamName = team.name;
     }
   }
 
@@ -59,9 +56,7 @@ export async function toPublicUser(
 }
 
 export async function hasAnyUsers(): Promise<boolean> {
-  const db = getFirestoreDb();
-  const snap = await db.collection(COL.USERS).limit(1).get();
-  return !snap.empty;
+  return getStore().hasAnyUsers();
 }
 
 export async function getCurrentUser(): Promise<UserRow | null> {
@@ -72,12 +67,8 @@ export async function getCurrentUser(): Promise<UserRow | null> {
   const payload = await verifySessionToken(token);
   if (!payload) return null;
 
-  const db = getFirestoreDb();
-  const snap = await db.collection(COL.USERS).doc(payload.userId).get();
-  if (!snap.exists) return null;
-
-  const user = snap.data() as UserRow;
-  if (!user.is_active) return null;
+  const user = await getStore().getUser(payload.userId);
+  if (!user || !user.is_active) return null;
 
   return user;
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, getEffectiveMonthlyTokens, TeamRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getEffectiveMonthlyTokens } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function PATCH(
   req: NextRequest,
@@ -13,14 +13,12 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.TEAMS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const store = getStore();
+  const existing = await store.getTeam(id);
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const existing = snap.data() as TeamRow;
   const body = (await req.json()) as {
     name?: string;
     description?: string;
@@ -28,7 +26,7 @@ export async function PATCH(
     isActive?: boolean;
   };
 
-  await ref.update({
+  await store.updateTeam(id, {
     name:
       typeof body.name === "string" && body.name.trim()
         ? body.name.trim()
@@ -45,7 +43,7 @@ export async function PATCH(
       typeof body.isActive === "boolean" ? body.isActive : existing.is_active,
   });
 
-  const updated = (await ref.get()).data() as TeamRow;
+  const updated = (await store.getTeam(id))!;
   return NextResponse.json({
     team: {
       id: updated.id,
@@ -69,10 +67,9 @@ export async function DELETE(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.TEAMS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const store = getStore();
+  const existing = await store.getTeam(id);
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -83,6 +80,6 @@ export async function DELETE(
     );
   }
 
-  await ref.delete();
+  await store.deleteTeam(id);
   return NextResponse.json({ ok: true });
 }

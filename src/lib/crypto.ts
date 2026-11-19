@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { getFirestoreDb } from "./firebase";
+import { getStore } from "./store";
 
 let cachedSecret: Buffer | null = null;
 
@@ -12,22 +12,15 @@ export async function getSecretKey(): Promise<Buffer> {
     return cachedSecret;
   }
 
-  const db = getFirestoreDb();
-  const docRef = db.collection("_system").doc("config");
-  const snap = await docRef.get();
-  if (snap.exists) {
-    const hex = snap.data()?.app_secret_hex as string | undefined;
-    if (hex) {
-      cachedSecret = Buffer.from(hex, "hex");
-      return cachedSecret;
-    }
+  const store = getStore();
+  const hex = await store.getAppSecretHex();
+  if (hex) {
+    cachedSecret = Buffer.from(hex, "hex");
+    return cachedSecret;
   }
 
   const generated = crypto.randomBytes(32);
-  await docRef.set(
-    { app_secret_hex: generated.toString("hex"), updated_at: new Date().toISOString() },
-    { merge: true }
-  );
+  await store.setAppSecretHex(generated.toString("hex"));
   cachedSecret = generated;
   return cachedSecret;
 }

@@ -1,6 +1,7 @@
 import { connection, NextResponse } from "next/server";
 import { getCurrentUser, hasAnyUsers, toPublicUser } from "@/lib/auth";
 import { getEffectiveMonthlyTokens } from "@/lib/db";
+import { resolveDbProvider } from "@/lib/store";
 
 export async function GET() {
   await connection();
@@ -11,6 +12,7 @@ export async function GET() {
         needsSetup: true,
         user: null,
         monthlyTokens: 0,
+        dbProvider: resolveDbProvider(),
       });
     }
 

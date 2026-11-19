@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, nowIso, ProjectFileRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { nowIso } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function DELETE(
   _req: NextRequest,
@@ -13,20 +13,14 @@ export async function DELETE(
   }
 
   const { id, fileId } = await context.params;
-  const db = getFirestoreDb();
-  const fileRef = db.collection(COL.PROJECT_FILES).doc(fileId);
-  const fileSnap = await fileRef.get();
-  if (!fileSnap.exists) {
+  const store = getStore();
+  const file = await store.getProjectFile(fileId);
+  if (!file || file.project_id !== id || file.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const file = fileSnap.data() as ProjectFileRow;
-  if (file.project_id !== id || file.user_id !== user.id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  await fileRef.delete();
-  await db.collection(COL.PROJECTS).doc(id).update({ updated_at: nowIso() });
+  await store.deleteProjectFile(fileId);
+  await store.updateProject(id, { updated_at: nowIso() });
 
   return NextResponse.json({ ok: true });
 }

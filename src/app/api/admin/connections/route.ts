@@ -2,13 +2,8 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
-import {
-  ClaudeConnectionRow,
-  COL,
-  ConnectionScope,
-  nowIso,
-} from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { ClaudeConnectionRow, ConnectionScope, nowIso } from "@/lib/db";
+import { getStore } from "@/lib/store";
 import { toPublicConnection } from "@/app/api/connections/route";
 
 export async function GET() {
@@ -20,11 +15,8 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const db = getFirestoreDb();
-  const snap = await db.collection(COL.CONNECTIONS).get();
-
-  const rows = snap.docs
-    .map((d) => d.data() as ClaudeConnectionRow)
+  const all = await getStore().listConnections(false);
+  const rows = all
     .filter((c) => {
       if (user.role === "system_admin") return true;
       return (
@@ -96,7 +88,7 @@ export async function POST(req: NextRequest) {
     teamId = user.team_id;
   }
 
-  const db = getFirestoreDb();
+  const store = getStore();
   const id = crypto.randomUUID();
   const now = nowIso();
   const encryptedKey =
@@ -112,17 +104,13 @@ export async function POST(req: NextRequest) {
       ? body.cliConfigDir.trim()
       : null;
 
-  const existingSnap = await db.collection(COL.CONNECTIONS).get();
+  const existing = await store.listConnections(false);
   const isDefault =
     user.role === "system_admin" &&
-    (Boolean(body.isDefault) || existingSnap.empty);
+    (Boolean(body.isDefault) || existing.length === 0);
 
   if (isDefault) {
-    const batch = db.batch();
-    for (const d of existingSnap.docs) {
-      batch.update(d.ref, { is_default: false });
-    }
-    await batch.commit();
+    await store.clearDefaultConnections();
   }
 
   const doc: ClaudeConnectionRow = {
@@ -145,7 +133,7 @@ export async function POST(req: NextRequest) {
     created_at: now,
   };
 
-  await db.collection(COL.CONNECTIONS).doc(id).set(doc);
+  await store.createConnection(doc);
 
   return NextResponse.json(
     { connection: toPublicConnection(doc) },

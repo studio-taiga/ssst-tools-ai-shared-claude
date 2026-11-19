@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setSessionCookie, toPublicUser } from "@/lib/auth";
 import { verifyPassword } from "@/lib/crypto";
-import { COL, UserRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getStore } from "@/lib/store";
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
@@ -20,22 +19,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const db = getFirestoreDb();
-  const snap = await db
-    .collection(COL.USERS)
-    .where("username", "==", username)
-    .limit(1)
-    .get();
-
-  if (snap.empty) {
-    return NextResponse.json(
-      { error: "ユーザー名またはパスワードが正しくありません。" },
-      { status: 401 }
-    );
-  }
-
-  const user = snap.docs[0].data() as UserRow;
-  if (!verifyPassword(password, user.password_hash)) {
+  const user = await getStore().getUserByUsername(username);
+  if (!user || !verifyPassword(password, user.password_hash)) {
     return NextResponse.json(
       { error: "ユーザー名またはパスワードが正しくありません。" },
       { status: 401 }

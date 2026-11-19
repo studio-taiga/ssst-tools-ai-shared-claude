@@ -4,13 +4,12 @@ import { hasAnyUsers, setSessionCookie, toPublicUser } from "@/lib/auth";
 import { encryptText, hashPassword } from "@/lib/crypto";
 import {
   ClaudeConnectionRow,
-  COL,
   currentMonthKey,
   nowIso,
   TeamRow,
   UserRow,
 } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getStore } from "@/lib/store";
 
 export async function POST(req: NextRequest) {
   if (await hasAnyUsers()) {
@@ -57,11 +56,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const db = getFirestoreDb();
+  const store = getStore();
   const now = nowIso();
   const month = currentMonthKey();
 
-  // Create initial default team
   const teamId = crypto.randomUUID();
   const teamDoc: TeamRow = {
     id: teamId,
@@ -73,9 +71,8 @@ export async function POST(req: NextRequest) {
     is_active: true,
     created_at: now,
   };
-  await db.collection(COL.TEAMS).doc(teamId).set(teamDoc);
+  await store.createTeam(teamDoc);
 
-  // Optional initial global connection
   let defaultConnectionId: string | null = null;
   if (body.connectionType) {
     const connId = crypto.randomUUID();
@@ -117,7 +114,7 @@ export async function POST(req: NextRequest) {
       is_default: true,
       created_at: now,
     };
-    await db.collection(COL.CONNECTIONS).doc(connId).set(connDoc);
+    await store.createConnection(connDoc);
     defaultConnectionId = connId;
   }
 
@@ -139,7 +136,7 @@ export async function POST(req: NextRequest) {
     created_at: now,
   };
 
-  await db.collection(COL.USERS).doc(userId).set(userDoc);
+  await store.createUser(userDoc);
 
   const res = NextResponse.json(
     { user: await toPublicUser(userDoc, teamName) },

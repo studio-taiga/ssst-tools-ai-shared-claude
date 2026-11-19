@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, nowIso, ProjectFileRow, ProjectRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { nowIso } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function GET(
   _req: NextRequest,
@@ -13,25 +13,13 @@ export async function GET(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const projSnap = await db.collection(COL.PROJECTS).doc(id).get();
-  if (!projSnap.exists) {
+  const store = getStore();
+  const project = await store.getProject(id);
+  if (!project || project.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const project = projSnap.data() as ProjectRow;
-  if (project.user_id !== user.id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const filesSnap = await db
-    .collection(COL.PROJECT_FILES)
-    .where("project_id", "==", id)
-    .where("user_id", "==", user.id)
-    .orderBy("created_at", "desc")
-    .get();
-
-  const files = filesSnap.docs.map((d) => d.data() as ProjectFileRow);
+  const files = await store.listProjectFiles(id, user.id);
   return NextResponse.json({ project, files });
 }
 
@@ -45,15 +33,9 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.PROJECTS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const project = snap.data() as ProjectRow;
-  if (project.user_id !== user.id) {
+  const store = getStore();
+  const project = await store.getProject(id);
+  if (!project || project.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -63,7 +45,7 @@ export async function PATCH(
     systemPrompt?: string;
   };
 
-  await ref.update({
+  await store.updateProject(id, {
     name:
       typeof body.name === "string" && body.name.trim()
         ? body.name.trim()
@@ -79,7 +61,7 @@ export async function PATCH(
     updated_at: nowIso(),
   });
 
-  const updated = (await ref.get()).data() as ProjectRow;
+  const updated = await store.getProject(id);
   return NextResponse.json({ project: updated });
 }
 
@@ -93,30 +75,12 @@ export async function DELETE(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.PROJECTS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const store = getStore();
+  const project = await store.getProject(id);
+  if (!project || project.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const project = snap.data() as ProjectRow;
-  if (project.user_id !== user.id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const filesSnap = await db
-    .collection(COL.PROJECT_FILES)
-    .where("project_id", "==", id)
-    .where("user_id", "==", user.id)
-    .get();
-
-  const batch = db.batch();
-  for (const f of filesSnap.docs) {
-    batch.delete(f.ref);
-  }
-  batch.delete(ref);
-  await batch.commit();
-
+  await store.deleteProjectAndFiles(id, user.id);
   return NextResponse.json({ ok: true });
 }

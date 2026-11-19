@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import {
-  COL,
-  ConversationRow,
-  MessageRow,
-  nowIso,
-  ProjectRow,
-} from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { nowIso } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function GET(
   _req: NextRequest,
@@ -19,34 +13,19 @@ export async function GET(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const convSnap = await db.collection(COL.CONVERSATIONS).doc(id).get();
-  if (!convSnap.exists) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const conversation = convSnap.data() as ConversationRow;
-  if (conversation.user_id !== user.id) {
+  const store = getStore();
+  const conversation = await store.getConversation(id);
+  if (!conversation || conversation.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   let projectName: string | null = null;
   if (conversation.project_id) {
-    const projSnap = await db
-      .collection(COL.PROJECTS)
-      .doc(conversation.project_id)
-      .get();
-    if (projSnap.exists) {
-      projectName = (projSnap.data() as ProjectRow).name;
-    }
+    const proj = await store.getProject(conversation.project_id);
+    if (proj) projectName = proj.name;
   }
 
-  const msgSnap = await db
-    .collection(COL.MESSAGES)
-    .where("conversation_id", "==", id)
-    .orderBy("created_at", "asc")
-    .get();
-  const messages = msgSnap.docs.map((d) => d.data() as MessageRow);
+  const messages = await store.listMessages(id);
 
   return NextResponse.json({
     conversation: { ...conversation, project_name: projectName },
@@ -64,15 +43,9 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.CONVERSATIONS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const existing = snap.data() as ConversationRow;
-  if (existing.user_id !== user.id) {
+  const store = getStore();
+  const existing = await store.getConversation(id);
+  if (!existing || existing.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -85,14 +58,8 @@ export async function PATCH(
   };
 
   if (body.projectId) {
-    const projSnap = await db
-      .collection(COL.PROJECTS)
-      .doc(body.projectId)
-      .get();
-    if (
-      !projSnap.exists ||
-      (projSnap.data() as ProjectRow).user_id !== user.id
-    ) {
+    const proj = await store.getProject(body.projectId);
+    if (!proj || proj.user_id !== user.id) {
       return NextResponse.json(
         { error: "指定されたプロジェクトが見つかりません。" },
         { status: 404 }
@@ -103,7 +70,7 @@ export async function PATCH(
   const nextProjectId =
     body.projectId !== undefined ? body.projectId : existing.project_id;
 
-  await ref.update({
+  await store.updateConversation(id, {
     title:
       typeof body.title === "string" && body.title.trim()
         ? body.title.trim()
@@ -124,16 +91,11 @@ export async function PATCH(
     updated_at: nowIso(),
   });
 
-  const updated = (await ref.get()).data() as ConversationRow;
+  const updated = (await store.getConversation(id))!;
   let projectName: string | null = null;
   if (updated.project_id) {
-    const projSnap = await db
-      .collection(COL.PROJECTS)
-      .doc(updated.project_id)
-      .get();
-    if (projSnap.exists) {
-      projectName = (projSnap.data() as ProjectRow).name;
-    }
+    const proj = await store.getProject(updated.project_id);
+    if (proj) projectName = proj.name;
   }
 
   return NextResponse.json({
@@ -151,28 +113,12 @@ export async function DELETE(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.CONVERSATIONS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const store = getStore();
+  const existing = await store.getConversation(id);
+  if (!existing || existing.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const existing = snap.data() as ConversationRow;
-  if (existing.user_id !== user.id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const msgSnap = await db
-    .collection(COL.MESSAGES)
-    .where("conversation_id", "==", id)
-    .get();
-  const batch = db.batch();
-  for (const m of msgSnap.docs) {
-    batch.delete(m.ref);
-  }
-  batch.delete(ref);
-  await batch.commit();
-
+  await store.deleteConversationAndMessages(id);
   return NextResponse.json({ ok: true });
 }

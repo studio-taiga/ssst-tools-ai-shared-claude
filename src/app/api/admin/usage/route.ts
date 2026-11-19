@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, UsageMonthlyRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { UsageMonthlyRow } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function GET() {
   const current = await getCurrentUser();
@@ -12,18 +12,13 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const db = getFirestoreDb();
+  const store = getStore();
   let records: UsageMonthlyRow[] = [];
 
   if (current.role === "system_admin") {
-    const snap = await db.collection(COL.USAGE_MONTHLY).get();
-    records = snap.docs.map((d) => d.data() as UsageMonthlyRow);
+    records = await store.listUsageMonthly({});
   } else if (current.team_id) {
-    const snap = await db
-      .collection(COL.USAGE_MONTHLY)
-      .where("team_id", "==", current.team_id)
-      .get();
-    records = snap.docs.map((d) => d.data() as UsageMonthlyRow);
+    records = await store.listUsageMonthly({ teamId: current.team_id });
   }
 
   records.sort((a, b) => {

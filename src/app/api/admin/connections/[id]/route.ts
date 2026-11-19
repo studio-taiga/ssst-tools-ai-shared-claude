@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { encryptText } from "@/lib/crypto";
-import { ClaudeConnectionRow, COL } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getStore } from "@/lib/store";
 import { toPublicConnection } from "@/app/api/connections/route";
 
 export async function PATCH(
@@ -18,15 +17,13 @@ export async function PATCH(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.CONNECTIONS).doc(id);
-  const snap = await ref.get();
+  const store = getStore();
+  const existing = await store.getConnection(id);
 
-  if (!snap.exists) {
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const existing = snap.data() as ClaudeConnectionRow;
   if (
     user.role === "team_admin" &&
     (existing.scope !== "team" || existing.team_id !== user.team_id)
@@ -67,22 +64,20 @@ export async function PATCH(
       : existing.is_default;
 
   if (isDefault && !existing.is_default) {
-    const allSnap = await db.collection(COL.CONNECTIONS).get();
-    const batch = db.batch();
-    for (const d of allSnap.docs) {
-      batch.update(d.ref, { is_default: false });
-    }
-    await batch.commit();
+    await store.clearDefaultConnections();
   }
 
   let nextScope = existing.scope ?? "global";
   let nextTeamId = existing.team_id ?? null;
-  if (user.role === "system_admin" && (body.scope === "global" || body.scope === "team")) {
+  if (
+    user.role === "system_admin" &&
+    (body.scope === "global" || body.scope === "team")
+  ) {
     nextScope = body.scope;
-    nextTeamId = nextScope === "team" ? (body.teamId ?? nextTeamId) : null;
+    nextTeamId = nextScope === "team" ? body.teamId ?? nextTeamId : null;
   }
 
-  await ref.update({
+  await store.updateConnection(id, {
     name:
       typeof body.name === "string" && body.name.trim()
         ? body.name.trim()
@@ -114,7 +109,7 @@ export async function PATCH(
     is_default: isDefault,
   });
 
-  const updated = (await ref.get()).data() as ClaudeConnectionRow;
+  const updated = (await store.getConnection(id))!;
   return NextResponse.json({ connection: toPublicConnection(updated) });
 }
 
@@ -131,14 +126,12 @@ export async function DELETE(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const ref = db.collection(COL.CONNECTIONS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const store = getStore();
+  const existing = await store.getConnection(id);
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const existing = snap.data() as ClaudeConnectionRow;
   if (
     user.role === "team_admin" &&
     (existing.scope !== "team" || existing.team_id !== user.team_id)
@@ -149,6 +142,6 @@ export async function DELETE(
     );
   }
 
-  await ref.delete();
+  await store.deleteConnection(id);
   return NextResponse.json({ ok: true });
 }

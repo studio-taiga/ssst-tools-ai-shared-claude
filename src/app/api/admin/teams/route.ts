@@ -2,14 +2,12 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
-  COL,
   currentMonthKey,
   getEffectiveMonthlyTokens,
   nowIso,
   TeamRow,
-  UserRow,
 } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getStore } from "@/lib/store";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -17,42 +15,30 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const db = getFirestoreDb();
+  const store = getStore();
   let teams: TeamRow[] = [];
 
   if (user.role === "system_admin") {
-    const snap = await db
-      .collection(COL.TEAMS)
-      .orderBy("created_at", "asc")
-      .get();
-    teams = snap.docs.map((d) => d.data() as TeamRow);
+    teams = await store.listTeams();
   } else if (user.team_id) {
-    const snap = await db.collection(COL.TEAMS).doc(user.team_id).get();
-    if (snap.exists) {
-      teams = [snap.data() as TeamRow];
-    }
+    const t = await store.getTeam(user.team_id);
+    if (t) teams = [t];
   }
 
-  const usersSnap =
+  const users =
     user.role === "system_admin"
-      ? await db.collection(COL.USERS).get()
+      ? await store.listUsers()
       : user.team_id
-      ? await db
-          .collection(COL.USERS)
-          .where("team_id", "==", user.team_id)
-          .get()
-      : null;
+      ? await store.listUsers(user.team_id)
+      : [];
 
   const memberCountByTeam = new Map<string, number>();
-  if (usersSnap) {
-    for (const doc of usersSnap.docs) {
-      const u = doc.data() as UserRow;
-      if (u.team_id) {
-        memberCountByTeam.set(
-          u.team_id,
-          (memberCountByTeam.get(u.team_id) ?? 0) + 1
-        );
-      }
+  for (const u of users) {
+    if (u.team_id) {
+      memberCountByTeam.set(
+        u.team_id,
+        (memberCountByTeam.get(u.team_id) ?? 0) + 1
+      );
     }
   }
 
@@ -90,7 +76,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const db = getFirestoreDb();
   const id = crypto.randomUUID();
   const now = nowIso();
   const teamDoc: TeamRow = {
@@ -105,7 +90,7 @@ export async function POST(req: NextRequest) {
     created_at: now,
   };
 
-  await db.collection(COL.TEAMS).doc(id).set(teamDoc);
+  await getStore().createTeam(teamDoc);
 
   return NextResponse.json(
     {

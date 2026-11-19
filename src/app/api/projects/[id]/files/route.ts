@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, nowIso, ProjectFileRow, ProjectRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { nowIso, ProjectFileRow } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 // Firestore document max size is 1 MiB; keep single knowledge file within 900 KB
 const MAX_FILE_BYTES = 900 * 1024;
@@ -17,15 +17,9 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const projRef = db.collection(COL.PROJECTS).doc(id);
-  const projSnap = await projRef.get();
-  if (!projSnap.exists) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  const project = projSnap.data() as ProjectRow;
-  if (project.user_id !== user.id) {
+  const store = getStore();
+  const project = await store.getProject(id);
+  if (!project || project.user_id !== user.id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -47,7 +41,7 @@ export async function POST(
   const sizeBytes = Buffer.byteLength(content, "utf8");
   if (sizeBytes > MAX_FILE_BYTES) {
     return NextResponse.json(
-      { error: "ナレッジファイルは1件あたり512KB以内にしてください。" },
+      { error: "ナレッジファイルは1件あたり900KB以内にしてください。" },
       { status: 400 }
     );
   }
@@ -64,8 +58,8 @@ export async function POST(
     created_at: now,
   };
 
-  await db.collection(COL.PROJECT_FILES).doc(fileId).set(fileDoc);
-  await projRef.update({ updated_at: now });
+  await store.createProjectFile(fileDoc);
+  await store.updateProject(id, { updated_at: now });
 
   return NextResponse.json({ file: fileDoc }, { status: 201 });
 }

@@ -7,8 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { resolveClaudeBinary } from "@/lib/claude-runner";
 import { decryptText } from "@/lib/crypto";
-import { ClaudeConnectionRow, COL } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getStore } from "@/lib/store";
 
 export async function POST(
   _req: NextRequest,
@@ -23,14 +22,11 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  const db = getFirestoreDb();
-  const snap = await db.collection(COL.CONNECTIONS).doc(id).get();
+  const conn = await getStore().getConnection(id);
 
-  if (!snap.exists) {
+  if (!conn) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  const conn = snap.data() as ClaudeConnectionRow;
   if (
     user.role === "team_admin" &&
     conn.scope === "team" &&

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, toPublicUser } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/crypto";
-import { COL, UserRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { getStore } from "@/lib/store";
 
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
@@ -56,8 +55,8 @@ export async function PATCH(req: NextRequest) {
     passwordHash = hashPassword(body.newPassword);
   }
 
-  const db = getFirestoreDb();
-  await db.collection(COL.USERS).doc(user.id).update({
+  const store = getStore();
+  await store.updateUser(user.id, {
     display_name: displayName,
     custom_instructions: customInstructions,
     default_model: defaultModel,
@@ -65,8 +64,6 @@ export async function PATCH(req: NextRequest) {
     password_hash: passwordHash,
   });
 
-  const updatedSnap = await db.collection(COL.USERS).doc(user.id).get();
-  const updated = updatedSnap.data() as UserRow;
-
-  return NextResponse.json({ user: await toPublicUser(updated) });
+  const updated = await store.getUser(user.id);
+  return NextResponse.json({ user: await toPublicUser(updated!) });
 }

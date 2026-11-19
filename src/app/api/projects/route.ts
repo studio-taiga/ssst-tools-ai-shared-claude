@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { COL, nowIso, ProjectRow } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { nowIso, ProjectRow } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -10,14 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getFirestoreDb();
-  const snap = await db
-    .collection(COL.PROJECTS)
-    .where("user_id", "==", user.id)
-    .orderBy("updated_at", "desc")
-    .get();
-
-  const projects = snap.docs.map((d) => d.data() as ProjectRow);
+  const projects = await getStore().listProjects(user.id);
   return NextResponse.json({ projects });
 }
 
@@ -41,7 +34,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const db = getFirestoreDb();
   const id = crypto.randomUUID();
   const now = nowIso();
 
@@ -55,6 +47,6 @@ export async function POST(req: NextRequest) {
     updated_at: now,
   };
 
-  await db.collection(COL.PROJECTS).doc(id).set(projectDoc);
+  await getStore().createProject(projectDoc);
   return NextResponse.json({ project: projectDoc }, { status: 201 });
 }

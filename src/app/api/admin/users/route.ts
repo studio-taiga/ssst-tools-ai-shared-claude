@@ -2,15 +2,8 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, toPublicUser } from "@/lib/auth";
 import { hashPassword } from "@/lib/crypto";
-import {
-  COL,
-  currentMonthKey,
-  nowIso,
-  TeamRow,
-  UserRole,
-  UserRow,
-} from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
+import { currentMonthKey, nowIso, UserRole, UserRow } from "@/lib/db";
+import { getStore } from "@/lib/store";
 
 export async function GET() {
   const current = await getCurrentUser();
@@ -21,39 +14,24 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const db = getFirestoreDb();
+  const store = getStore();
+  const users =
+    current.role === "system_admin"
+      ? await store.listUsers()
+      : current.team_id
+      ? await store.listUsers(current.team_id)
+      : [];
 
-  let users: UserRow[] = [];
-  if (current.role === "system_admin") {
-    const snap = await db
-      .collection(COL.USERS)
-      .orderBy("created_at", "asc")
-      .get();
-    users = snap.docs.map((d) => d.data() as UserRow);
-  } else if (current.team_id) {
-    const snap = await db
-      .collection(COL.USERS)
-      .where("team_id", "==", current.team_id)
-      .orderBy("created_at", "asc")
-      .get();
-    users = snap.docs.map((d) => d.data() as UserRow);
-  }
-
-  const teamsSnap = await db.collection(COL.TEAMS).get();
+  const teams = await store.listTeams();
   const teamMap = new Map<string, string>();
-  for (const doc of teamsSnap.docs) {
-    const t = doc.data() as TeamRow;
+  for (const t of teams) {
     teamMap.set(t.id, t.name);
   }
 
   const enriched = await Promise.all(
-    users.map(async (u) => {
-      const pub = await toPublicUser(
-        u,
-        u.team_id ? teamMap.get(u.team_id) ?? null : null
-      );
-      return pub;
-    })
+    users.map((u) =>
+      toPublicUser(u, u.team_id ? teamMap.get(u.team_id) ?? null : null)
+    )
   );
 
   return NextResponse.json({ users: enriched });
@@ -100,7 +78,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 3階層権限チェック
   let role: UserRole = "member";
   let teamId: string | null = null;
 
@@ -119,7 +96,6 @@ export async function POST(req: NextRequest) {
       );
     }
   } else {
-    // team_admin can only create members in their own team
     if (body.role && body.role !== "member") {
       return NextResponse.json(
         { error: "チーム管理者は一般メンバーのみ作成できます。" },
@@ -136,13 +112,9 @@ export async function POST(req: NextRequest) {
     teamId = current.team_id;
   }
 
-  const db = getFirestoreDb();
-  const dup = await db
-    .collection(COL.USERS)
-    .where("username", "==", username)
-    .limit(1)
-    .get();
-  if (!dup.empty) {
+  const store = getStore();
+  const dup = await store.getUserByUsername(username);
+  if (dup) {
     return NextResponse.json(
       { error: "このユーザー名は既に使用されています。" },
       { status: 409 }
@@ -169,7 +141,7 @@ export async function POST(req: NextRequest) {
     created_at: now,
   };
 
-  await db.collection(COL.USERS).doc(id).set(userDoc);
+  await store.createUser(userDoc);
 
   return NextResponse.json(
     { user: await toPublicUser(userDoc) },
