@@ -2,12 +2,12 @@
 
 import { BarChart3, UserCog, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { CLAUDE_MODELS } from "@/lib/models";
 import {
   PublicConnection,
   PublicUser,
   UsageMonthlyItem,
 } from "@/types/app";
+import { ModelPicker, RemoteModelOption } from "./ModelPicker";
 
 interface ProfileModalProps {
   user: PublicUser;
@@ -40,6 +40,27 @@ export function ProfileModal({
   const [success, setSuccess] = useState<string | null>(null);
   const [usageRecords, setUsageRecords] = useState<UsageMonthlyItem[]>([]);
   const [loadingUsage, setLoadingUsage] = useState(true);
+  const [remoteModels, setRemoteModels] = useState<RemoteModelOption[]>([]);
+
+  const effectiveConn =
+    connections.find((c) => c.id === defaultConnectionId) ??
+    connections.find((c) => c.isDefault) ??
+    connections[0] ??
+    null;
+
+  useEffect(() => {
+    if (!effectiveConn || effectiveConn.type !== "anthropic_api") return;
+    let active = true;
+    fetch(`/api/connections/${effectiveConn.id}/models`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { models?: RemoteModelOption[] } | null) => {
+        if (active && data?.models) setRemoteModels(data.models);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [effectiveConn]);
 
   useEffect(() => {
     let active = true;
@@ -173,22 +194,6 @@ export function ProfileModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                  デフォルトモデル
-                </label>
-                <select
-                  value={defaultModel}
-                  onChange={(e) => setDefaultModel(e.target.value)}
-                  className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
-                >
-                  {CLAUDE_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
                   デフォルトClaude接続先
                 </label>
                 <select
@@ -204,6 +209,24 @@ export function ProfileModal({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
+                  デフォルトモデル
+                </label>
+                <div className="flex">
+                  <ModelPicker
+                    selectedModel={defaultModel}
+                    remoteModels={
+                      effectiveConn?.type === "anthropic_api"
+                        ? remoteModels
+                        : []
+                    }
+                    defaultModelOverride={effectiveConn?.defaultModelOverride}
+                    showPricing={effectiveConn?.type === "anthropic_api"}
+                    onSelect={(modelId) => setDefaultModel(modelId)}
+                  />
+                </div>
               </div>
             </div>
 

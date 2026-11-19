@@ -56,6 +56,23 @@ interface WorkspaceAppProps {
   onLoggedOut: () => void;
 }
 
+function resolveDefaultModel(
+  conns: PublicConnection[],
+  targetConnId: string | null,
+  u: PublicUser
+): string {
+  const targetConn =
+    conns.find((c) => c.id === targetConnId) ??
+    conns.find((c) => c.id === u.defaultConnectionId) ??
+    conns.find((c) => c.isDefault) ??
+    conns[0] ??
+    null;
+  if (targetConn?.defaultModelOverride) {
+    return targetConn.defaultModelOverride;
+  }
+  return u.defaultModel;
+}
+
 export function WorkspaceApp({
   initialUser,
   initialMonthlyTokens,
@@ -150,7 +167,19 @@ export function WorkspaceApp({
     fetch("/api/connections")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { connections: PublicConnection[] } | null) => {
-        if (active && data) setConnections(data.connections);
+        if (active && data) {
+          setConnections(data.connections);
+          setSelectedModel((prev) => {
+            if (prev === initialUser.defaultModel) {
+              return resolveDefaultModel(
+                data.connections,
+                initialUser.defaultConnectionId,
+                initialUser
+              );
+            }
+            return prev;
+          });
+        }
       })
       .catch(() => {});
     fetch("/api/projects")
@@ -162,7 +191,7 @@ export function WorkspaceApp({
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialUser]);
 
   useEffect(() => {
     let active = true;
@@ -234,10 +263,13 @@ export function WorkspaceApp({
   const startNewChat = () => {
     setChatError(null);
     setActiveConvId(null);
+    setActiveArtifact(null);
     setMessages([]);
     setStreamingText("");
-    setSelectedModel(user.defaultModel);
-    setSelectedConnectionId(user.defaultConnectionId ?? "");
+    setStreamingThinking("");
+    const defConnId = user.defaultConnectionId ?? "";
+    setSelectedConnectionId(defConnId);
+    setSelectedModel(resolveDefaultModel(connections, defConnId || null, user));
     setDraftProjectId(selectedProjectId);
     setSidebarOpen(false);
   };
@@ -267,7 +299,11 @@ export function WorkspaceApp({
     if (patch.model !== undefined) setSelectedModel(patch.model);
     if (patch.connectionId !== undefined) {
       setSelectedConnectionId(patch.connectionId ?? "");
-      const targetConn = connections.find((c) => c.id === patch.connectionId);
+      const targetConn = patch.connectionId
+        ? connections.find((c) => c.id === patch.connectionId)
+        : connections.find((c) => c.id === user.defaultConnectionId) ??
+          connections.find((c) => c.isDefault) ??
+          connections[0];
       if (targetConn?.defaultModelOverride && patch.model === undefined) {
         effectiveModel = targetConn.defaultModelOverride;
         setSelectedModel(effectiveModel);

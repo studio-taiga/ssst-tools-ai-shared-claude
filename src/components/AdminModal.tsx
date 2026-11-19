@@ -1463,7 +1463,7 @@ export function AdminModal({
                       </div>
                       <div>
                         <label className="block text-[10px] text-[#858077] mb-1">
-                          カスタムモデル ID 上書き（任意）
+                          この接続先のデフォルトモデル ID（任意）
                         </label>
                         <input
                           type="text"
@@ -1680,7 +1680,7 @@ export function AdminModal({
                           </div>
                           <div>
                             <label className="block text-[10px] text-[#858077] mb-1">
-                              カスタムモデル ID 上書き（任意）
+                              この接続先のデフォルトモデル ID（任意）
                             </label>
                             <input
                               type="text"
