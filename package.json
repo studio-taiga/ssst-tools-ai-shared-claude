@@ -13,6 +13,8 @@
     "@anthropic-ai/sdk": "^1.10.0",
     "firebase-admin": "^14.5.1",
     "lucide-react": "^1.75.0",
+    "mongodb": "^7.9.1",
+    "mysql2": "^3.24.6",
     "next": "16.4.6",
     "pdfjs-dist": "^6.5.438",
     "pg": "^8.23.1",

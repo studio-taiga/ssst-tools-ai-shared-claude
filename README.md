@@ -25,47 +25,61 @@
 
 ---
 
-## データベースの選択（3 方式対応）
+## データベースの選択（6 方式対応）
 
-環境変数 `DB_PROVIDER`（または接続用環境変数）によって、利用環境に合わせたデータベースを選べます。
+環境変数 `DB_PROVIDER`（または接続用環境変数）によって、利用環境に合わせたデータベースを選べます。テーブルやインデックスは初回起動時に自動作成されます。
 
-| 方式 | `DB_PROVIDER` | 必要な設定 | おすすめの用途 |
+| 方式 | `DB_PROVIDER` | 必要な環境変数 | おすすめの用途 |
 | :--- | :--- | :--- | :--- |
-| **ローカルファイル** | `local` | 設定不要（`./data/shared-claude-store.json` に自動保存） | ローカル PC・VPS・Docker での単体セルフホスト |
-| **PostgreSQL / Supabase / Neon** | `postgres` | `DATABASE_URL`（初回起動時にテーブルを自動作成） | Vercel 等のサーバーレス環境（無料枠で完結） |
-| **Firebase Cloud Firestore** | `firestore` | `FIREBASE_PROJECT_ID` と `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase Spark プラン無料枠 + Vercel 等 |
+| **PostgreSQL** | `postgres` | `DATABASE_URL` | Supabase / Neon / Render / Railway / Vercel Postgres |
+| **MySQL / MariaDB** | `mysql` | `MYSQL_URL` | TiDB Cloud / 既存 MySQL サーバー |
+| **MongoDB** | `mongodb` | `MONGODB_URI`（任意で `MONGODB_DB_NAME`） | MongoDB Atlas 無料枠 / Docker MongoDB |
+| **Firebase Firestore** | `firestore` | `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` | Firebase Spark 無料枠 |
+| **SQLite (`node:sqlite`)** | `sqlite` | 任意で `SQLITE_PATH`（Node.js 22+ 組み込み） | Docker / VPS / 自宅サーバーでの永続ファイル DB |
+| **ローカル JSON** | `local` | 不要（`./data/shared-claude-store.json` に保存） | ローカルでの即時お試し起動 |
 
-※ `DB_PROVIDER` を省略した場合は、`DATABASE_URL` → `FIREBASE_*` → `local` の順で自動判定されます。
+※ `DB_PROVIDER` を省略した場合は、`DATABASE_URL` → `MYSQL_URL` → `MONGODB_URI` → `FIREBASE_*` → `SQLITE_PATH` → `local` の順で自動判定されます。
 
 ---
 
-## セットアップ方法
+## デプロイ・起動方法
 
-### 1. ローカルで動かす（最短・設定不要）
+### 方法 1: ローカルで動かす（Node.js 22+ 推奨）
 
 ```bash
 git clone <your-repo-url>
 cd shared-claude
 npm install
-npm run dev
+# SQLite を使う場合は DB_PROVIDER=sqlite を指定（省略時は local JSON）
+DB_PROVIDER=sqlite npm run dev
 ```
 
 ブラウザで `http://localhost:3000` を開くと、初回セットアップ画面（システム管理者アカウント・初期チーム・最初の接続先の登録）が表示されます。
 
 ---
 
-### 2. Vercel ＋ 無料データベースで公開する（例）
+### 方法 2: Docker / Docker Compose で動かす（VPS・自宅サーバー・Render 等）
 
-1. **データベースを準備する（どちらか一方）**
-   - **PostgreSQL (Supabase / Neon 等)**: 接続文字列 `DATABASE_URL` を取得します（テーブルは初回アクセス時に自動作成されます）。
-   - **Firebase Firestore**: Firebase プロジェクトを作成し、Firestore データベースを有効化したうえで、サービスアカウントの秘密鍵 JSON を取得します（必要に応じて `npx -y firebase-tools@latest deploy --only firestore` で `firestore.rules` を反映してください）。
-2. **Vercel にデプロイする**
-   - このリポジトリを Vercel にインポートし、**Environment Variables** に以下を設定します：
-     - PostgreSQL の場合：`DATABASE_URL`
-     - Firestore の場合：`FIREBASE_PROJECT_ID` と `FIREBASE_SERVICE_ACCOUNT_JSON`
-     - 任意：`APP_SECRET`（未設定時は DB 内に自動生成）
-3. **初回セットアップ**
-   - デプロイされた URL にアクセスし、画面の案内に従ってシステム管理者アカウントと Claude 接続先を登録します。
+`Dockerfile` と `docker-compose.yml` を同梱しています。
+
+```bash
+docker compose up -d --build
+```
+
+デフォルトでは `DB_PROVIDER=sqlite` が有効になり、`./data/shared-claude.sqlite` にデータが永続化されます。
+
+---
+
+### 方法 3: PaaS / クラウドにデプロイする
+
+- **Render / Railway / Koyeb / Fly.io（長時間ストリーミング・Max プラン CLI 共有におすすめ）**
+  - 同梱の `Dockerfile` または Node.js ビルド（`npm run build` / `npm run start`）でそのままデプロイできます。
+  - サーバーレス関数の短いタイムアウトがないため、**長い論文の考察** や **Max プラン（`claude_cli`）の実行** でも安定して動作します。
+  - 永続ディスクをマウントして `DB_PROVIDER=sqlite` にするか、外部 DB（`DATABASE_URL` / `MYSQL_URL` / `MONGODB_URI` / `FIREBASE_*`）を指定してください。
+
+- **Vercel（サーバーレス無料枠）**
+  - リポジトリを Vercel にインポートし、Environment Variables に外部 DB の環境変数（`DATABASE_URL`、`MYSQL_URL`、`MONGODB_URI`、または `FIREBASE_PROJECT_ID` + `FIREBASE_SERVICE_ACCOUNT_JSON`）を設定してデプロイします。
+  - ※サーバーレス関数には実行時間制限があるため、極端に長い応答や頻繁な CLI 起動にはコンテナ型ホスティング（Render / Railway / Docker）の方が適しています。
 
 ---
 

@@ -1,0 +1,14 @@
+services:
+  shared-claude:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DB_PROVIDER=sqlite
+      - SQLITE_PATH=/app/data/shared-claude.sqlite
+      # 必要に応じて以下を設定（アプリ内の管理画面からも設定可能）
+      # - APP_SECRET=change-me-to-a-long-random-secret
+      # - ANTHROPIC_API_KEY=sk-ant-...
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

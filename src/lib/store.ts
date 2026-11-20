@@ -1,9 +1,18 @@
 import { DataStore } from "./store-types";
 import { FirestoreStore } from "./stores/firestore-store";
 import { LocalFileStore } from "./stores/local-store";
+import { MongoDbStore } from "./stores/mongodb-store";
+import { MysqlStore } from "./stores/mysql-store";
 import { PostgresStore } from "./stores/postgres-store";
+import { SqliteStore } from "./stores/sqlite-store";
 
-export type DbProvider = "firestore" | "postgres" | "local";
+export type DbProvider =
+  | "firestore"
+  | "postgres"
+  | "mysql"
+  | "mongodb"
+  | "sqlite"
+  | "local";
 
 const globalForStore = globalThis as unknown as {
   __sharedClaudeStore?: DataStore;
@@ -12,11 +21,24 @@ const globalForStore = globalThis as unknown as {
 
 export function resolveDbProvider(): DbProvider {
   const explicit = (process.env.DB_PROVIDER ?? "").trim().toLowerCase();
-  if (explicit === "firestore" || explicit === "postgres" || explicit === "local") {
+  if (
+    explicit === "firestore" ||
+    explicit === "postgres" ||
+    explicit === "mysql" ||
+    explicit === "mongodb" ||
+    explicit === "sqlite" ||
+    explicit === "local"
+  ) {
     return explicit;
   }
   if (process.env.DATABASE_URL) {
     return "postgres";
+  }
+  if (process.env.MYSQL_URL) {
+    return "mysql";
+  }
+  if (process.env.MONGODB_URI) {
+    return "mongodb";
   }
   if (
     process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
@@ -25,6 +47,9 @@ export function resolveDbProvider(): DbProvider {
     process.env.GOOGLE_CLOUD_PROJECT
   ) {
     return "firestore";
+  }
+  if (process.env.SQLITE_PATH) {
+    return "sqlite";
   }
   return "local";
 }
@@ -39,12 +64,25 @@ export function getStore(): DataStore {
   }
 
   let store: DataStore;
-  if (provider === "postgres") {
-    store = new PostgresStore();
-  } else if (provider === "firestore") {
-    store = new FirestoreStore();
-  } else {
-    store = new LocalFileStore();
+  switch (provider) {
+    case "postgres":
+      store = new PostgresStore();
+      break;
+    case "mysql":
+      store = new MysqlStore();
+      break;
+    case "mongodb":
+      store = new MongoDbStore();
+      break;
+    case "firestore":
+      store = new FirestoreStore();
+      break;
+    case "sqlite":
+      store = new SqliteStore();
+      break;
+    default:
+      store = new LocalFileStore();
+      break;
   }
 
   globalForStore.__sharedClaudeStore = store;
