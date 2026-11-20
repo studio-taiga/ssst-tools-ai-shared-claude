@@ -4,9 +4,11 @@ import { Sparkles } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import { AuthView } from "@/components/AuthView";
 import { WorkspaceApp } from "@/components/WorkspaceApp";
+import { useI18n } from "@/lib/i18n";
 import { PublicUser } from "@/types/app";
 
 export default function HomePage() {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [user, setUser] = useState<PublicUser | null>(null);
@@ -66,7 +68,7 @@ export default function HomePage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#191817] text-[#9e998e] gap-3">
         <Sparkles className="w-6 h-6 text-[#d97757] animate-pulse" />
-        <span className="text-xs">読み込み中...</span>
+        <span className="text-xs">{t("loading")}</span>
       </div>
     );
   }

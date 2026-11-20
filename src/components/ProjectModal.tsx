@@ -2,6 +2,7 @@
 
 import { FileText, FolderPlus, Plus, Trash2, Upload, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { ProjectFileItem, ProjectItem } from "@/types/app";
 
@@ -18,6 +19,8 @@ export function ProjectModal({
   onSaved,
   onDeleted,
 }: ProjectModalProps) {
+  const { lang, t } = useI18n();
+  const en = lang === "en";
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
   const [systemPrompt, setSystemPrompt] = useState(
@@ -58,12 +61,12 @@ export function ProjectModal({
         error?: string;
       };
       if (!res.ok || !data.project) {
-        setError(data.error || "保存に失敗しました。");
+        setError(data.error || (en ? "Failed to save." : "保存に失敗しました。"));
         return;
       }
       onSaved(data.project);
     } catch {
-      setError("通信エラーが発生しました。");
+      setError(en ? "A network error occurred." : "通信エラーが発生しました。");
     } finally {
       setSaving(false);
     }
@@ -98,7 +101,12 @@ export function ProjectModal({
           error?: string;
         };
         if (!res.ok || !data.file) {
-          setError(data.error || `${file.name} の追加に失敗しました。`);
+          setError(
+            data.error ||
+              (en
+                ? `Failed to add ${file.name}.`
+                : `${file.name} の追加に失敗しました。`)
+          );
         } else {
           setFiles((prev) => [data.file!, ...prev]);
         }
@@ -106,7 +114,9 @@ export function ProjectModal({
         setError(
           err instanceof Error
             ? err.message
-            : `${file.name} の読み込みに失敗しました。`
+            : en
+              ? `Failed to read ${file.name}.`
+              : `${file.name} の読み込みに失敗しました。`
         );
       }
     }
@@ -134,7 +144,10 @@ export function ProjectModal({
       error?: string;
     };
     if (!res.ok || !data.file) {
-      setError(data.error || "ナレッジの追加に失敗しました。");
+      setError(
+        data.error ||
+          (en ? "Failed to add knowledge." : "ナレッジの追加に失敗しました。")
+      );
       return;
     }
     setFiles((prev) => [data.file!, ...prev]);
@@ -155,7 +168,13 @@ export function ProjectModal({
 
   const handleDeleteProject = async () => {
     if (!project || !onDeleted) return;
-    if (!confirm(`プロジェクト「${project.name}」を削除しますか？（チャット履歴は保持されます）`)) {
+    if (
+      !confirm(
+        en
+          ? `Delete project "${project.name}"? (Chat history will be preserved)`
+          : `プロジェクト「${project.name}」を削除しますか？（チャット履歴は保持されます）`
+      )
+    ) {
       return;
     }
     const res = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
@@ -171,7 +190,13 @@ export function ProjectModal({
           <div className="flex items-center gap-2.5">
             <FolderPlus className="w-5 h-5 text-[#d97757]" />
             <h2 className="text-base font-semibold text-[#faf9f5]">
-              {project ? `プロジェクト設定: ${project.name}` : "新規プロジェクト作成"}
+              {project
+                ? en
+                  ? `Project Settings: ${project.name}`
+                  : `プロジェクト設定: ${project.name}`
+                : en
+                  ? "New Project"
+                  : "新規プロジェクト作成"}
             </h2>
           </div>
           <button
@@ -187,40 +212,54 @@ export function ProjectModal({
           <form id="project-form" onSubmit={handleSave} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                プロジェクト名
+                {en ? "Project Name" : "プロジェクト名"}
               </label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="例: 新規Webアプリ開発、マーケティング企画"
+                placeholder={
+                  en
+                    ? "e.g., Web App Development, Marketing Plan"
+                    : "例: 新規Webアプリ開発、マーケティング企画"
+                }
                 className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-sm text-[#eceae4] focus:outline-none focus:border-[#d97757]"
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                説明（任意）
+                {en ? "Description (Optional)" : "説明（任意）"}
               </label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="このプロジェクトの用途や背景"
+                placeholder={
+                  en
+                    ? "Purpose and background of this project"
+                    : "このプロジェクトの用途や背景"
+                }
                 className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-sm text-[#eceae4] focus:outline-none focus:border-[#d97757]"
               />
             </div>
 
             <div>
               <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                プロジェクト固有のカスタム指示（システムプロンプト）
+                {en
+                  ? "Project Custom Instructions (System Prompt)"
+                  : "プロジェクト固有のカスタム指示（システムプロンプト）"}
               </label>
               <textarea
                 rows={4}
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                placeholder="このプロジェクト内のすべてのチャットに適用される前提条件・ルール・トーンなど"
+                placeholder={
+                  en
+                    ? "Rules, context, or tone applied to all chats in this project"
+                    : "このプロジェクト内のすべてのチャットに適用される前提条件・ルール・トーンなど"
+                }
                 className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-sm text-[#eceae4] focus:outline-none focus:border-[#d97757]"
               />
             </div>
@@ -253,10 +292,14 @@ export function ProjectModal({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-[#faf9f5]">
-                    プロジェクトナレッジ（コンテキストファイル）
+                    {en
+                      ? "Project Knowledge (Context Files)"
+                      : "プロジェクトナレッジ（コンテキストファイル）"}
                   </h3>
                   <p className="text-xs text-[#9e998e]">
-                    登録したファイルの内容はこのプロジェクト内のチャットに自動注入されます。
+                    {en
+                      ? "Registered files are automatically injected into chats in this project."
+                      : "登録したファイルの内容はこのプロジェクト内のチャットに自動注入されます。"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -266,11 +309,11 @@ export function ProjectModal({
                     className="inline-flex items-center gap-1 rounded-lg border border-[#35322e] bg-[#191817] hover:bg-[#2a2825] px-2.5 py-1.5 text-xs text-[#eceae4] cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>テキスト追加</span>
+                    <span>{en ? "Add Text" : "テキスト追加"}</span>
                   </button>
                   <label className="inline-flex items-center gap-1 rounded-lg bg-[#d97757]/15 border border-[#d97757]/40 hover:bg-[#d97757]/25 px-2.5 py-1.5 text-xs text-[#f3c6b6] cursor-pointer">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>ファイル選択</span>
+                    <span>{en ? "Upload Files" : "ファイル選択"}</span>
                     <input
                       type="file"
                       multiple
@@ -288,14 +331,18 @@ export function ProjectModal({
                     type="text"
                     value={newFilename}
                     onChange={(e) => setNewFilename(e.target.value)}
-                    placeholder="ファイル名（例: spec.md）"
+                    placeholder={en ? "Filename (e.g., spec.md)" : "ファイル名（例: spec.md）"}
                     className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                   />
                   <textarea
                     rows={4}
                     value={newFileContent}
                     onChange={(e) => setNewFileContent(e.target.value)}
-                    placeholder="ナレッジとして保存するテキストを貼り付け..."
+                    placeholder={
+                      en
+                        ? "Paste text to save as project knowledge..."
+                        : "ナレッジとして保存するテキストを貼り付け..."
+                    }
                     className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                   />
                   <div className="flex justify-end gap-2">
@@ -304,14 +351,14 @@ export function ProjectModal({
                       onClick={() => setShowAddText(false)}
                       className="px-3 py-1 text-xs text-[#9e998e] hover:text-[#eceae4] cursor-pointer"
                     >
-                      キャンセル
+                      {t("cancel")}
                     </button>
                     <button
                       type="button"
                       onClick={handleAddTextKnowledge}
                       className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1 text-xs font-medium text-white cursor-pointer"
                     >
-                      追加する
+                      {en ? "Add" : "追加する"}
                     </button>
                   </div>
                 </div>
@@ -319,7 +366,7 @@ export function ProjectModal({
 
               {files.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#35322e] py-6 text-center text-xs text-[#858077]">
-                  まだナレッジファイルがありません
+                  {en ? "No knowledge files yet" : "まだナレッジファイルがありません"}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -354,7 +401,9 @@ export function ProjectModal({
             </div>
           ) : (
             <p className="text-xs text-[#858077]">
-              ※ナレッジファイルはプロジェクト作成後に追加できます。
+              {en
+                ? "* Knowledge files can be added after creating the project."
+                : "※ナレッジファイルはプロジェクト作成後に追加できます。"}
             </p>
           )}
 
@@ -374,7 +423,7 @@ export function ProjectModal({
                 className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>プロジェクトを削除</span>
+                <span>{en ? "Delete Project" : "プロジェクトを削除"}</span>
               </button>
             )}
           </div>
@@ -384,7 +433,7 @@ export function ProjectModal({
               onClick={onClose}
               className="rounded-lg border border-[#35322e] px-4 py-2 text-xs text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
             >
-              閉じる
+              {t("close")}
             </button>
             <button
               type="submit"
@@ -392,7 +441,7 @@ export function ProjectModal({
               disabled={saving}
               className="rounded-lg bg-[#d97757] hover:bg-[#c86747] disabled:opacity-50 px-4 py-2 text-xs font-medium text-white cursor-pointer"
             >
-              {saving ? "保存中..." : "保存"}
+              {saving ? t("saving") : t("save")}
             </button>
           </div>
         </div>

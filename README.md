@@ -1,5 +1,7 @@
 # Shared Claude
 
+🌐 **Language:** 日本語 | [English](./README.en.md)
+
 1つの **Anthropic API キー** や **Claude プラン契約（Pro / Max / Team）**、あるいは **OpenRouter / Ollama 等の互換 API** をバックエンドとして共有しつつ、利用メンバーごとに **仮想アカウント・チャット履歴・プロジェクト・コンテキストを完全に分離** できるセルフホスト型 Web アプリです。
 
 ---

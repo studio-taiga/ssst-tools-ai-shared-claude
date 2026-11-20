@@ -2,6 +2,7 @@
 
 import { Check, ChevronDown, Search, Sparkles, X } from "lucide-react";
 import React, { useMemo, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import { CLAUDE_MODELS } from "@/lib/models";
 
 export interface RemoteModelOption {
@@ -49,6 +50,7 @@ export function ModelPicker({
   showPricing,
   onSelect,
 }: ModelPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [freeOnly, setFreeOnly] = useState(false);
@@ -127,7 +129,7 @@ export function ModelPicker({
     if (pricing.inputPerMillionUsd === 0 && pricing.outputPerMillionUsd === 0) {
       return (
         <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-medium shrink-0">
-          無料
+          {t("freeBadge")}
         </span>
       );
     }
@@ -172,15 +174,15 @@ export function ModelPicker({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#d97757]" />
                 <span className="text-sm font-semibold text-[#faf9f5]">
-                  モデル選択
+                  {t("modelSelectTitle")}
                 </span>
                 {showPricing ? (
                   <span className="text-[10px] text-[#858077]">
-                    (単価: 入力 / 出力 per 1M tok)
+                    {t("pricingUnitNote")}
                   </span>
                 ) : (
                   <span className="text-[10px] text-emerald-300">
-                    (プラン契約定額枠)
+                    {t("planFixedNote")}
                   </span>
                 )}
               </div>
@@ -201,7 +203,7 @@ export function ModelPicker({
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="モデル名や ID で検索..."
+                  placeholder={t("searchModelsPlaceholder")}
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] pl-8 pr-3 py-1.5 text-base sm:text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 />
               </div>
@@ -216,7 +218,7 @@ export function ModelPicker({
                       : "bg-[#191817] border-[#35322e] text-[#9e998e] hover:text-[#eceae4]"
                   }`}
                 >
-                  無料のみ
+                  {t("freeOnly")}
                 </button>
               )}
             </div>
@@ -224,7 +226,7 @@ export function ModelPicker({
             <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {filteredOptions.length === 0 ? (
                 <div className="py-8 text-center text-xs text-[#858077]">
-                  一致するモデルが見つかりません
+                  {t("noModelsFound")}
                 </div>
               ) : (
                 filteredOptions.map((opt) => {
@@ -280,14 +282,14 @@ export function ModelPicker({
                 type="text"
                 value={customDraft}
                 onChange={(e) => setCustomDraft(e.target.value)}
-                placeholder="カスタムモデル ID を直接入力..."
+                placeholder={t("customModelPlaceholder")}
                 className="flex-1 rounded-lg bg-[#191817] border border-[#35322e] px-2.5 py-1.5 text-base sm:text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
               />
               <button
                 type="submit"
                 className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1.5 text-xs font-medium text-white shrink-0 cursor-pointer"
               >
-                指定
+                {t("applyBtn")}
               </button>
             </form>
           </div>

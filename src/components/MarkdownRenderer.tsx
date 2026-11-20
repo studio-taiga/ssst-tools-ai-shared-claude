@@ -4,6 +4,7 @@ import { Check, Copy } from "lucide-react";
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useI18n } from "@/lib/i18n";
 
 function CodeBlock({
   className,
@@ -12,6 +13,7 @@ function CodeBlock({
   className?: string;
   children?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || "");
   const lang = match?.[1] || "";
@@ -43,12 +45,12 @@ function CodeBlock({
           {copied ? (
             <>
               <Check className="w-3.5 h-3.5 text-emerald-400" />
-              <span>コピー済み</span>
+              <span>{t("copied")}</span>
             </>
           ) : (
             <>
               <Copy className="w-3.5 h-3.5" />
-              <span>コピー</span>
+              <span>{t("copy")}</span>
             </>
           )}
         </button>

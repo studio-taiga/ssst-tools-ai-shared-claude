@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { LanguageSwitch, useI18n } from "@/lib/i18n";
 import { RESPONSE_STYLES } from "@/lib/models";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import {
@@ -78,6 +79,7 @@ export function WorkspaceApp({
   initialMonthlyTokens,
   onLoggedOut,
 }: WorkspaceAppProps) {
+  const { t } = useI18n();
   const [user, setUser] = useState<PublicUser>(initialUser);
   const [monthlyTokens, setMonthlyTokens] = useState(initialMonthlyTokens);
   const [connections, setConnections] = useState<PublicConnection[]>([]);
@@ -790,14 +792,17 @@ export function WorkspaceApp({
               Shared Claude
             </span>
           </div>
-          <button
-            type="button"
-            onClick={startNewChat}
-            className="inline-flex items-center gap-1 rounded-lg bg-[#d97757] hover:bg-[#c86747] px-2.5 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>新規</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <LanguageSwitch />
+            <button
+              type="button"
+              onClick={startNewChat}
+              className="inline-flex items-center gap-1 rounded-lg bg-[#d97757] hover:bg-[#c86747] px-2.5 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{t("newChat")}</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5">
@@ -805,7 +810,7 @@ export function WorkspaceApp({
           <div>
             <div className="flex items-center justify-between px-2 mb-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[#858077]">
-                プロジェクト
+                {t("projects")}
               </span>
               <button
                 type="button"
@@ -828,7 +833,7 @@ export function WorkspaceApp({
               >
                 <span className="flex items-center gap-2 truncate">
                   <Folder className="w-3.5 h-3.5 shrink-0" />
-                  <span>すべてのチャット</span>
+                  <span>{t("allChats")}</span>
                 </span>
               </button>
 
@@ -875,7 +880,7 @@ export function WorkspaceApp({
           {/* Conversations */}
           <div>
             <div className="px-2 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#858077]">
-              チャット履歴
+              {t("chatHistory")}
             </div>
             <div className="px-1.5 mb-2">
               <div className="relative">
@@ -884,7 +889,7 @@ export function WorkspaceApp({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="履歴を検索..."
+                  placeholder={t("searchHistory")}
                   className="w-full rounded-lg bg-[#1e1c1a] border border-[#2b2824] pl-8 pr-2.5 py-1 text-xs text-[#eceae4] placeholder-[#6f6b63] focus:outline-none focus:border-[#d97757]"
                 />
               </div>
@@ -899,7 +904,7 @@ export function WorkspaceApp({
               if (filtered.length === 0) {
                 return (
                   <div className="px-2.5 py-3 text-xs text-[#6f6b63]">
-                    {q ? "一致する履歴がありません" : "履歴はまだありません"}
+                    {q ? t("noMatchingHistory") : t("noHistory")}
                   </div>
                 );
               }
@@ -1037,7 +1042,7 @@ export function WorkspaceApp({
               className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-[#2f2c28] bg-[#1e1c1a] hover:bg-[#262421] py-1.5 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
             >
               <Settings className="w-3.5 h-3.5" />
-              <span>アカウント設定</span>
+              <span>{t("accountSettings")}</span>
             </button>
             {(user.role === "system_admin" || user.role === "team_admin") && (
               <button
@@ -1047,7 +1052,9 @@ export function WorkspaceApp({
               >
                 <Shield className="w-3.5 h-3.5" />
                 <span>
-                  {user.role === "system_admin" ? "システム管理" : "チーム管理"}
+                  {user.role === "system_admin"
+                    ? t("systemAdmin")
+                    : t("teamAdmin")}
                 </span>
               </button>
             )}
@@ -1082,10 +1089,10 @@ export function WorkspaceApp({
             <div className="text-center space-y-2">
               <Paperclip className="w-8 h-8 text-[#d97757] mx-auto" />
               <div className="text-sm font-semibold text-[#faf9f5]">
-                ファイルをドロップして添付
+                {t("dropFilesTitle")}
               </div>
               <div className="text-xs text-[#9e998e]">
-                論文 PDF・画像・実験データ (CSV / TXT / JSON など) に対応
+                {t("dropFilesSub")}
               </div>
             </div>
           </div>
@@ -1112,7 +1119,7 @@ export function WorkspaceApp({
               className="rounded-lg bg-[#22201e] border border-[#35322e] px-2 sm:px-2.5 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757] max-w-[140px] sm:max-w-[190px] truncate"
               title="Claude接続先（API / プラン契約）"
             >
-              <option value="">接続先: 標準</option>
+              <option value="">{t("defaultConnection")}</option>
               {connections.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.type === "claude_cli" ? "📋 " : "🔑 "}
@@ -1143,7 +1150,7 @@ export function WorkspaceApp({
               className="rounded-lg bg-[#22201e] border border-[#35322e] px-2 sm:px-2.5 py-1.5 text-xs text-[#b7b3aa] focus:outline-none focus:border-[#d97757] flex-1 sm:flex-initial min-w-0 max-w-full sm:max-w-[160px] truncate"
               title="紐づくプロジェクト"
             >
-              <option value="">プロジェクトなし</option>
+              <option value="">{t("noProject")}</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   📁 {p.name}
@@ -1172,25 +1179,26 @@ export function WorkspaceApp({
                   <Sparkles className="w-6 h-6" />
                 </div>
                 <h2 className="text-xl font-semibold text-[#faf9f5]">
-                  こんにちは、{user.displayName} さん
+                  {t("welcomePrefix")}
+                  {user.displayName}
+                  {t("welcomeSuffix")}
                 </h2>
                 <p className="text-xs text-[#9e998e] max-w-md mx-auto leading-relaxed">
-                  このワークスペースのチャット履歴・プロジェクト・ナレッジはあなたの仮想アカウント（@{user.username}）専用に完全に分離されています。
+                  {t("welcomeDesc")}
                 </p>
                 {activeProject && (
                   <div className="inline-flex items-center gap-2 rounded-xl border border-[#d97757]/30 bg-[#d97757]/10 px-3.5 py-2 text-xs text-[#f3c6b6]">
                     <FolderOpen className="w-4 h-4" />
                     <span>
-                      プロジェクト「{activeProject.name}」のコンテキストが有効です
+                      {activeProject.name} — {t("projectContextActive")}
                     </span>
                   </div>
                 )}
                 {connections.length === 0 && (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200 max-w-md mx-auto">
-                    有効なClaude接続先がまだありません。
                     {user.role === "system_admin" || user.role === "team_admin"
-                      ? "左下の管理パネルから APIキー 等を登録してください。"
-                      : "管理者にClaude接続先の登録を依頼してください。"}
+                      ? t("noActiveConnectionsAdmin")
+                      : t("noActiveConnectionsMember")}
                   </div>
                 )}
               </div>
@@ -1267,14 +1275,14 @@ export function WorkspaceApp({
                                   onClick={() => setEditingMsgId(null)}
                                   className="px-2.5 py-1 text-xs text-[#b7b3aa] cursor-pointer"
                                 >
-                                  キャンセル
+                                  {t("cancel")}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => void handleEditAndResend(m)}
                                   className="rounded-lg bg-[#d97757] px-3 py-1 text-xs font-medium text-white cursor-pointer"
                                 >
-                                  保存して再送信
+                                  {t("saveAndResend")}
                                 </button>
                               </div>
                             </div>
@@ -1310,7 +1318,7 @@ export function WorkspaceApp({
                               className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
                             >
                               <Brain className="w-3.5 h-3.5 text-[#d97757]" />
-                              <span>思考プロセス</span>
+                              <span>{t("thinkingProcess")}</span>
                               {isThinkingOpen ? (
                                 <ChevronDown className="w-3.5 h-3.5 ml-auto" />
                               ) : (
@@ -1339,7 +1347,7 @@ export function WorkspaceApp({
                                 <Sparkles className="w-3.5 h-3.5 text-[#d97757]" />
                                 <span>{art.title}</span>
                                 <span className="text-[10px] text-[#b7b3aa]">
-                                  プレビュー
+                                  {t("previewBtn")}
                                 </span>
                               </button>
                             ))}
@@ -1370,7 +1378,7 @@ export function WorkspaceApp({
                               title="この回答を再生成"
                             >
                               <RotateCcw className="w-3 h-3" />
-                              <span>再生成</span>
+                              <span>{t("regenerateBtn")}</span>
                             </button>
                           )}
                         </div>
@@ -1389,7 +1397,7 @@ export function WorkspaceApp({
                         <div className="rounded-xl border border-[#302d29] bg-[#1e1c1a] p-3 space-y-1">
                           <div className="flex items-center gap-1.5 text-xs text-[#d97757]">
                             <Brain className="w-3.5 h-3.5 animate-pulse" />
-                            <span>思考中...</span>
+                            <span>{t("thinkingNow")}</span>
                           </div>
                           <div className="text-xs text-[#9e998e] whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
                             {streamingThinking}
@@ -1401,7 +1409,7 @@ export function WorkspaceApp({
                       ) : (
                         !streamingThinking && (
                           <span className="text-xs text-[#9e998e]">
-                            Claude が応答を生成中...
+                            {t("generating")}
                           </span>
                         )
                       )}
@@ -1467,7 +1475,7 @@ export function WorkspaceApp({
                   void handleSend();
                 }
               }}
-              placeholder="Claude にメッセージを送信..."
+              placeholder={t("composerPlaceholder")}
               className="w-full resize-none bg-transparent text-base sm:text-sm text-[#eceae4] placeholder-[#78736a] focus:outline-none"
             />
 
@@ -1479,10 +1487,10 @@ export function WorkspaceApp({
                 >
                   <Paperclip className="w-4 h-4" />
                   <span className="hidden sm:inline">
-                    {extractingFiles ? "PDF読込中..." : "添付 (PDF可)"}
+                    {extractingFiles ? t("loadingPdf") : t("attachPdfOk")}
                   </span>
                   <span className="sm:hidden">
-                    {extractingFiles ? "読込中..." : "添付"}
+                    {extractingFiles ? t("loadingPdf") : t("attach")}
                   </span>
                   <input
                     type="file"
@@ -1504,7 +1512,7 @@ export function WorkspaceApp({
                   title="Extended Thinking (拡張思考)"
                 >
                   <Brain className="w-3.5 h-3.5" />
-                  <span>思考</span>
+                  <span>{t("thinkingToggle")}</span>
                 </button>
 
                 <button
@@ -1515,10 +1523,10 @@ export function WorkspaceApp({
                       ? "bg-sky-500/15 border-sky-500/40 text-sky-300"
                       : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
                   }`}
-                  title="Web 検索連携 (Anthropic API)"
+                  title="Web Search (Anthropic API)"
                 >
                   <Globe className="w-3.5 h-3.5" />
-                  <span>Web</span>
+                  <span>{t("webToggle")}</span>
                 </button>
 
                 <button
@@ -1529,10 +1537,10 @@ export function WorkspaceApp({
                       ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
                       : "border-transparent text-[#858077] hover:text-[#eceae4] hover:bg-[#2a2825]"
                   }`}
-                  title="Artifacts プレビュー生成"
+                  title="Artifacts Preview"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Artifact</span>
+                  <span>{t("artifactToggle")}</span>
                 </button>
 
                 <select
@@ -1557,7 +1565,7 @@ export function WorkspaceApp({
                     className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/20 border border-red-500/40 hover:bg-red-500/30 px-3 py-2 sm:py-1.5 text-xs font-medium text-red-200 cursor-pointer"
                   >
                     <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>停止</span>
+                    <span>{t("stop")}</span>
                   </button>
                 ) : (
                   <button
@@ -1567,7 +1575,7 @@ export function WorkspaceApp({
                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#d97757] hover:bg-[#c86747] disabled:opacity-40 px-3.5 py-2 sm:py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>送信</span>
+                    <span>{t("send")}</span>
                   </button>
                 )}
               </div>

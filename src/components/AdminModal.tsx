@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   PublicConnection,
   PublicUser,
@@ -33,10 +34,16 @@ interface AdminModalProps {
   onConnectionsChanged: () => void;
 }
 
-const ROLE_LABELS: Record<UserRole, string> = {
+const ROLE_LABELS_JA: Record<UserRole, string> = {
   system_admin: "システム管理者",
   team_admin: "チーム管理者",
   member: "一般メンバー",
+};
+
+const ROLE_LABELS_EN: Record<UserRole, string> = {
+  system_admin: "System Admin",
+  team_admin: "Team Admin",
+  member: "Member",
 };
 
 export function AdminModal({
@@ -46,6 +53,9 @@ export function AdminModal({
   onClose,
   onConnectionsChanged,
 }: AdminModalProps) {
+  const { lang } = useI18n();
+  const en = lang === "en";
+  const ROLE_LABELS = en ? ROLE_LABELS_EN : ROLE_LABELS_JA;
   const isSystemAdmin = currentUserRole === "system_admin";
   const [tab, setTab] = useState<"users" | "teams" | "connections" | "usage">(
     "users"
@@ -583,7 +593,13 @@ export function AdminModal({
           <div className="flex items-center gap-2.5">
             <Shield className="w-5 h-5 text-[#d97757]" />
             <h2 className="text-base font-semibold text-[#faf9f5]">
-              {isSystemAdmin ? "システム管理パネル" : "チーム管理パネル"}
+              {isSystemAdmin
+                ? en
+                  ? "System Admin Panel"
+                  : "システム管理パネル"
+                : en
+                  ? "Team Admin Panel"
+                  : "チーム管理パネル"}
             </h2>
           </div>
           <button
@@ -607,7 +623,14 @@ export function AdminModal({
           >
             <Users className="w-4 h-4" />
             <span>
-              {isSystemAdmin ? "仮想アカウント" : "チームメンバー"} ({users.length})
+              {isSystemAdmin
+                ? en
+                  ? "Accounts"
+                  : "仮想アカウント"
+                : en
+                  ? "Team Members"
+                  : "チームメンバー"}{" "}
+              ({users.length})
             </span>
           </button>
 
@@ -622,7 +645,14 @@ export function AdminModal({
           >
             <Building2 className="w-4 h-4" />
             <span>
-              {isSystemAdmin ? "チーム管理" : "自チーム状況"} ({teams.length})
+              {isSystemAdmin
+                ? en
+                  ? "Teams"
+                  : "チーム管理"
+                : en
+                  ? "My Team"
+                  : "自チーム状況"}{" "}
+              ({teams.length})
             </span>
           </button>
 
@@ -636,7 +666,9 @@ export function AdminModal({
             }`}
           >
             <KeyRound className="w-4 h-4" />
-            <span>Claude接続先 ({connections.length})</span>
+            <span>
+              {en ? "Connections" : "Claude接続先"} ({connections.length})
+            </span>
           </button>
 
           <button
@@ -649,7 +681,7 @@ export function AdminModal({
             }`}
           >
             <BarChart3 className="w-4 h-4" />
-            <span>利用状況レポート</span>
+            <span>{en ? "Usage Report" : "利用状況レポート"}</span>
           </button>
         </div>
 
@@ -662,7 +694,7 @@ export function AdminModal({
 
           {loading ? (
             <div className="py-12 text-center text-xs text-[#9e998e]">
-              読み込み中...
+              {en ? "Loading..." : "読み込み中..."}
             </div>
           ) : tab === "users" ? (
             <>
@@ -674,8 +706,12 @@ export function AdminModal({
                   <Plus className="w-4 h-4 text-[#d97757]" />
                   <span>
                     {isSystemAdmin
-                      ? "新規仮想アカウントを発行"
-                      : "自チームに新規メンバーを追加"}
+                      ? en
+                        ? "Create New Account"
+                        : "新規仮想アカウントを発行"
+                      : en
+                        ? "Add Member to Team"
+                        : "自チームに新規メンバーを追加"}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -684,14 +720,18 @@ export function AdminModal({
                     required
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="ユーザー名 (半角英数)"
+                    placeholder={
+                      en ? "Username (alphanumeric)" : "ユーザー名 (半角英数)"
+                    }
                     className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                   />
                   <input
                     type="text"
                     value={newDisplayName}
                     onChange={(e) => setNewDisplayName(e.target.value)}
-                    placeholder="表示名 (例: 田中 太郎)"
+                    placeholder={
+                      en ? "Display name (e.g., Jane Doe)" : "表示名 (例: 田中 太郎)"
+                    }
                     className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                   />
                   <input
@@ -699,7 +739,9 @@ export function AdminModal({
                     required
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="初期パスワード (6文字以上)"
+                    placeholder={
+                      en ? "Initial password (6+ chars)" : "初期パスワード (6文字以上)"
+                    }
                     className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                   />
                 </div>
@@ -711,16 +753,16 @@ export function AdminModal({
                         onChange={(e) => setNewRole(e.target.value as UserRole)}
                         className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                       >
-                        <option value="member">一般メンバー</option>
-                        <option value="team_admin">チーム管理者</option>
-                        <option value="system_admin">システム管理者</option>
+                        <option value="member">{ROLE_LABELS.member}</option>
+                        <option value="team_admin">{ROLE_LABELS.team_admin}</option>
+                        <option value="system_admin">{ROLE_LABELS.system_admin}</option>
                       </select>
                       <select
                         value={newUserTeamId}
                         onChange={(e) => setNewUserTeamId(e.target.value)}
                         className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                       >
-                        <option value="">チームなし</option>
+                        <option value="">{en ? "No Team" : "チームなし"}</option>
                         {teams.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.name}
@@ -734,7 +776,9 @@ export function AdminModal({
                       onChange={(e) => setNewUserConnId(e.target.value)}
                       className="sm:col-span-2 rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                     >
-                      <option value="">接続先: システム標準</option>
+                      <option value="">
+                        {en ? "Connection: System Default" : "接続先: システム標準"}
+                      </option>
                       {connections.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
@@ -747,14 +791,18 @@ export function AdminModal({
                     min={0}
                     value={newTokenLimit}
                     onChange={(e) => setNewTokenLimit(e.target.value)}
-                    placeholder="月間トークン上限 (空=無制限)"
+                    placeholder={
+                      en
+                        ? "Monthly token limit (empty=unlimited)"
+                        : "月間トークン上限 (空=無制限)"
+                    }
                     className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                   />
                   <button
                     type="submit"
                     className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
                   >
-                    アカウント作成
+                    {en ? "Create Account" : "アカウント作成"}
                   </button>
                 </div>
               </form>
@@ -976,7 +1024,7 @@ export function AdminModal({
                 >
                   <div className="text-xs font-semibold text-[#faf9f5] flex items-center gap-1.5">
                     <Plus className="w-4 h-4 text-[#d97757]" />
-                    <span>新規チームを作成</span>
+                    <span>{en ? "Create New Team" : "新規チームを作成"}</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <input
@@ -984,14 +1032,14 @@ export function AdminModal({
                       required
                       value={newTeamName}
                       onChange={(e) => setNewTeamName(e.target.value)}
-                      placeholder="チーム名（例: 開発チーム）"
+                      placeholder={en ? "Team name (e.g., Engineering)" : "チーム名（例: 開発チーム）"}
                       className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                     />
                     <input
                       type="text"
                       value={newTeamDesc}
                       onChange={(e) => setNewTeamDesc(e.target.value)}
-                      placeholder="説明（任意）"
+                      placeholder={en ? "Description (Optional)" : "説明（任意）"}
                       className="rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                     />
                     <div className="flex gap-2">
@@ -1000,14 +1048,14 @@ export function AdminModal({
                         min={0}
                         value={newTeamLimit}
                         onChange={(e) => setNewTeamLimit(e.target.value)}
-                        placeholder="月間上限 (空=無制限)"
+                        placeholder={en ? "Monthly limit (empty=unlimited)" : "月間上限 (空=無制限)"}
                         className="flex-1 rounded-lg bg-[#22201e] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                       />
                       <button
                         type="submit"
                         className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-3 py-1.5 text-xs font-medium text-white cursor-pointer"
                       >
-                        作成
+                        {en ? "Create" : "作成"}
                       </button>
                     </div>
                   </div>
@@ -1222,14 +1270,16 @@ export function AdminModal({
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs text-[#9e998e]">
-                      当月・過去の月ごとのユーザー別利用状況（モデル別単価に基づく概算 API 料金、プラン契約枠は $0）
+                      {en
+                        ? "Monthly & historical usage per user (Estimated API cost by model rate; plan/CLI quota is $0)"
+                        : "当月・過去の月ごとのユーザー別利用状況（モデル別単価に基づく概算 API 料金、プラン契約枠は $0）"}
                     </div>
                     <select
                       value={selectedUsageMonth}
                       onChange={(e) => setSelectedUsageMonth(e.target.value)}
                       className="rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4]"
                     >
-                      <option value="all">全期間合計</option>
+                      <option value="all">{en ? "All Time" : "全期間合計"}</option>
                       {usageMonths.map((m) => (
                         <option key={m} value={m}>
                           {m}
@@ -1512,7 +1562,7 @@ export function AdminModal({
                         checked={connDefault}
                         onChange={(e) => setConnDefault(e.target.checked)}
                       />
-                      <span>システムデフォルトにする</span>
+                      <span>{en ? "Set as system default" : "システムデフォルトにする"}</span>
                     </label>
                   ) : (
                     <span />
@@ -1521,7 +1571,7 @@ export function AdminModal({
                     type="submit"
                     className="rounded-lg bg-[#d97757] hover:bg-[#c86747] px-4 py-1.5 text-xs font-medium text-white cursor-pointer"
                   >
-                    接続先を追加
+                    {en ? "Add Connection" : "接続先を追加"}
                   </button>
                 </div>
               </form>
@@ -1548,12 +1598,18 @@ export function AdminModal({
                             {c.name}
                           </span>
                           <span className="px-2 py-0.5 rounded text-[10px] bg-[#2a2825] text-[#b7b3aa]">
-                            {c.scope === "global" ? "全体共通" : "チーム専用"}
+                            {c.scope === "global"
+                              ? en
+                                ? "Global"
+                                : "全体共通"
+                              : en
+                                ? "Team Only"
+                                : "チーム専用"}
                           </span>
                           {c.isDefault && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-emerald-500/15 text-emerald-300">
                               <CheckCircle2 className="w-3 h-3" />
-                              デフォルト
+                              {en ? "Default" : "デフォルト"}
                             </span>
                           )}
                         </div>
@@ -1570,7 +1626,7 @@ export function AdminModal({
                                 tr?.loading ? "animate-spin" : ""
                               }`}
                             />
-                            <span>接続テスト</span>
+                            <span>{en ? "Test Connection" : "接続テスト"}</span>
                           </button>
                           {isSystemAdmin && !c.isDefault && (
                             <button
@@ -1578,7 +1634,7 @@ export function AdminModal({
                               onClick={() => handleSetDefaultConnection(c)}
                               className="rounded-lg border border-[#35322e] px-2.5 py-1 text-[11px] text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
                             >
-                              標準にする
+                              {en ? "Set Default" : "標準にする"}
                             </button>
                           )}
                           {canEditConn && (

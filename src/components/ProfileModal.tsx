@@ -2,6 +2,7 @@
 
 import { BarChart3, UserCog, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   PublicConnection,
   PublicUser,
@@ -24,6 +25,7 @@ export function ProfileModal({
   onClose,
   onUpdated,
 }: ProfileModalProps) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"settings" | "usage">("settings");
   const [displayName, setDisplayName] = useState(user.displayName);
   const [customInstructions, setCustomInstructions] = useState(
@@ -124,7 +126,7 @@ export function ProfileModal({
           <div className="flex items-center gap-2.5">
             <UserCog className="w-5 h-5 text-[#d97757]" />
             <h2 className="text-base font-semibold text-[#faf9f5]">
-              仮想アカウント設定 ({user.username})
+              {t("accountSettings")} ({user.username})
             </h2>
           </div>
           <button
@@ -147,7 +149,7 @@ export function ProfileModal({
             }`}
           >
             <UserCog className="w-3.5 h-3.5" />
-            <span>アカウント設定</span>
+            <span>{t("accountSettings")}</span>
           </button>
           <button
             type="button"
@@ -159,7 +161,7 @@ export function ProfileModal({
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            <span>利用状況・過去履歴</span>
+            <span>{t("usageHistoryTab")}</span>
           </button>
         </div>
 
@@ -169,18 +171,18 @@ export function ProfileModal({
             className="flex-1 overflow-y-auto p-6 space-y-4"
           >
             <div className="rounded-xl border border-[#302d29] bg-[#191817] px-4 py-3 flex items-center justify-between text-xs">
-              <span className="text-[#9e998e]">今月の利用トークン数</span>
+              <span className="text-[#9e998e]">{t("monthlyTokensLabel")}</span>
               <span className="font-mono font-medium text-[#eceae4]">
                 {monthlyTokens.toLocaleString()}
                 {user.monthlyTokenLimit !== null
                   ? ` / ${user.monthlyTokenLimit.toLocaleString()}`
-                  : " (上限なし)"}
+                  : ` (${t("unlimited")})`}
               </span>
             </div>
 
             <div>
               <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                表示名
+                {t("displayNameLabel")}
               </label>
               <input
                 type="text"
@@ -194,14 +196,14 @@ export function ProfileModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                  デフォルトClaude接続先
+                  {t("defaultConnLabel")}
                 </label>
                 <select
                   value={defaultConnectionId}
                   onChange={(e) => setDefaultConnectionId(e.target.value)}
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 >
-                  <option value="">システム標準を使用</option>
+                  <option value="">{t("useSystemDefault")}</option>
                   {connections.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} (
@@ -212,7 +214,7 @@ export function ProfileModal({
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                  デフォルトモデル
+                  {t("defaultModelLabel")}
                 </label>
                 <div className="flex">
                   <ModelPicker
@@ -232,7 +234,7 @@ export function ProfileModal({
 
             <div>
               <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                このアカウントのカスタム指示（ペルソナ・共通コンテキスト）
+                {t("customInstructionsLabel")}
               </label>
               <textarea
                 rows={4}
@@ -245,21 +247,21 @@ export function ProfileModal({
 
             <div className="pt-3 border-t border-[#302d29] space-y-3">
               <div className="text-xs font-medium text-[#b7b3aa]">
-                パスワード変更（変更しない場合は空欄）
+                {t("changePasswordTitle")}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="現在のパスワード"
+                  placeholder={t("currentPasswordPlaceholder")}
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 />
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="新しいパスワード（6文字以上）"
+                  placeholder={t("newPasswordPlaceholder")}
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 />
               </div>
@@ -282,14 +284,14 @@ export function ProfileModal({
                 onClick={onClose}
                 className="rounded-lg border border-[#35322e] px-4 py-2 text-xs text-[#b7b3aa] hover:text-[#eceae4] cursor-pointer"
               >
-                閉じる
+                {t("close")}
               </button>
               <button
                 type="submit"
                 disabled={saving}
                 className="rounded-lg bg-[#d97757] hover:bg-[#c86747] disabled:opacity-50 px-4 py-2 text-xs font-medium text-white cursor-pointer"
               >
-                {saving ? "保存中..." : "保存する"}
+                {saving ? t("saving") : t("save")}
               </button>
             </div>
           </form>

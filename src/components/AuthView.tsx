@@ -2,6 +2,7 @@
 
 import { ChevronDown, ChevronRight, KeyRound, ShieldCheck, Sparkles, Terminal } from "lucide-react";
 import React, { useState } from "react";
+import { LanguageSwitch, useI18n } from "@/lib/i18n";
 import { PublicUser } from "@/types/app";
 
 interface AuthViewProps {
@@ -15,9 +16,12 @@ export function AuthView({
   initialError,
   onAuthenticated,
 }: AuthViewProps) {
+  const { lang, t } = useI18n();
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [teamName, setTeamName] = useState("デフォルトチーム");
+  const [teamName, setTeamName] = useState(
+    lang === "ja" ? "デフォルトチーム" : "Default Team"
+  );
   const [password, setPassword] = useState("");
   const [connectionType, setConnectionType] = useState<
     "anthropic_api" | "claude_cli"
@@ -67,13 +71,13 @@ export function AuthView({
       };
 
       if (!res.ok || !data.user) {
-        setError(data.error || "認証に失敗しました。");
+        setError(data.error || t("authFailed"));
         return;
       }
 
       onAuthenticated(data.user);
     } catch {
-      setError("通信エラーが発生しました。");
+      setError(t("networkError"));
     } finally {
       setLoading(false);
     }
@@ -82,26 +86,27 @@ export function AuthView({
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#191817]">
       <div className="w-full max-w-md rounded-2xl border border-[#302d29] bg-[#22201e] p-7 shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-[#d97757]/15 border border-[#d97757]/40 flex items-center justify-center text-[#d97757]">
-            <Sparkles className="w-5 h-5" />
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#d97757]/15 border border-[#d97757]/40 flex items-center justify-center text-[#d97757]">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-[#faf9f5]">
+                Shared Claude
+              </h1>
+              <p className="text-xs text-[#9e998e]">
+                {needsSetup ? t("appSubtitleSetup") : t("appSubtitleLogin")}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-[#faf9f5]">
-              Shared Claude
-            </h1>
-            <p className="text-xs text-[#9e998e]">
-              {needsSetup
-                ? "初期セットアップ — システム管理者を作成"
-                : "仮想アカウントでログイン"}
-            </p>
-          </div>
+          <LanguageSwitch />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-              ユーザー名（半角英数字）
+              {t("usernameLabel")}
             </label>
             <input
               type="text"
@@ -117,25 +122,25 @@ export function AuthView({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                  表示名
+                  {t("displayNameLabel")}
                 </label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="システム管理者"
+                  placeholder="Admin"
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-sm text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-                  初期チーム名
+                  {t("teamNameLabel")}
                 </label>
                 <input
                   type="text"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="デフォルトチーム"
+                  placeholder="Default Team"
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-sm text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 />
               </div>
@@ -144,14 +149,14 @@ export function AuthView({
 
           <div>
             <label className="block text-xs font-medium text-[#b7b3aa] mb-1.5">
-              パスワード
+              {t("passwordLabel")}
             </label>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="6文字以上"
+              placeholder={t("passwordPlaceholder")}
               className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-2 text-sm text-[#eceae4] focus:outline-none focus:border-[#d97757]"
             />
           </div>
@@ -160,7 +165,7 @@ export function AuthView({
             <div className="pt-2 border-t border-[#302d29] space-y-3">
               <div className="flex items-center gap-1.5 text-xs font-medium text-[#d97757]">
                 <ShieldCheck className="w-4 h-4" />
-                <span>最初のClaude接続先（あとで追加・変更可能）</span>
+                <span>{t("firstConnectionTitle")}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -174,7 +179,7 @@ export function AuthView({
                   }`}
                 >
                   <KeyRound className="w-3.5 h-3.5" />
-                  <span>従量課金 (API)</span>
+                  <span>{t("connTypeApi")}</span>
                 </button>
                 <button
                   type="button"
@@ -186,13 +191,13 @@ export function AuthView({
                   }`}
                 >
                   <Terminal className="w-3.5 h-3.5" />
-                  <span>プラン契約 (CLI)</span>
+                  <span>{t("connTypeCli")}</span>
                 </button>
               </div>
 
               <div>
                 <label className="block text-xs text-[#9e998e] mb-1">
-                  接続名（任意）
+                  {t("connNameOptional")}
                 </label>
                 <input
                   type="text"
@@ -200,8 +205,8 @@ export function AuthView({
                   onChange={(e) => setConnectionName(e.target.value)}
                   placeholder={
                     connectionType === "anthropic_api"
-                      ? "システム共通 Anthropic API"
-                      : "Claude プラン契約 (CLI)"
+                      ? "Anthropic API"
+                      : "Claude Subscription (CLI)"
                   }
                   className="w-full rounded-lg bg-[#191817] border border-[#35322e] px-3 py-1.5 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                 />
@@ -210,7 +215,7 @@ export function AuthView({
               {connectionType === "anthropic_api" ? (
                 <div>
                   <label className="block text-xs text-[#9e998e] mb-1">
-                    API キー（環境変数 ANTHROPIC_API_KEY を使う場合は空欄）
+                    {t("apiKeyLabel")}
                   </label>
                   <input
                     type="password"
@@ -223,7 +228,7 @@ export function AuthView({
               ) : (
                 <div>
                   <label className="block text-xs text-[#9e998e] mb-1">
-                    OAuth トークン（<code className="text-[#d97757]">claude setup-token</code> で発行）
+                    {t("oauthTokenLabel")}
                   </label>
                   <input
                     type="password"
@@ -246,14 +251,14 @@ export function AuthView({
                   ) : (
                     <ChevronRight className="w-3.5 h-3.5" />
                   )}
-                  <span>詳細オプション（互換エンドポイント Base URL など）</span>
+                  <span>{t("advancedOptions")}</span>
                 </button>
 
                 {showAdvancedConn && (
                   <div className="mt-2 space-y-2 rounded-lg border border-[#302d29] bg-[#191817] p-2.5">
                     <div>
                       <label className="block text-[11px] text-[#9e998e] mb-1">
-                        Base URL（省略時は https://api.anthropic.com）
+                        {t("baseUrlLabel")}
                       </label>
                       <input
                         type="url"
@@ -265,26 +270,26 @@ export function AuthView({
                     </div>
                     <div>
                       <label className="block text-[11px] text-[#9e998e] mb-1">
-                        互換サービス用カスタムモデル ID（任意）
+                        {t("modelOverrideLabel")}
                       </label>
                       <input
                         type="text"
                         value={defaultModelOverride}
                         onChange={(e) => setDefaultModelOverride(e.target.value)}
-                        placeholder="例: anthropic/claude-sonnet-4.5"
+                        placeholder="e.g. anthropic/claude-sonnet-4.5"
                         className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                       />
                     </div>
                     {connectionType === "claude_cli" && (
                       <div>
                         <label className="block text-[11px] text-[#9e998e] mb-1">
-                          ローカル認証ディレクトリ (CLAUDE_CONFIG_DIR)
+                          {t("cliDirLabel")}
                         </label>
                         <input
                           type="text"
                           value={cliConfigDir}
                           onChange={(e) => setCliConfigDir(e.target.value)}
-                          placeholder="通常は空欄"
+                          placeholder=""
                           className="w-full rounded-lg bg-[#22201e] border border-[#35322e] px-2.5 py-1 text-xs text-[#eceae4] focus:outline-none focus:border-[#d97757]"
                         />
                       </div>
@@ -307,10 +312,10 @@ export function AuthView({
             className="w-full rounded-lg bg-[#d97757] hover:bg-[#c86747] disabled:opacity-50 text-white font-medium py-2.5 text-sm transition-colors cursor-pointer"
           >
             {loading
-              ? "処理中..."
+              ? t("processing")
               : needsSetup
-              ? "システム管理者を作成して開始"
-              : "ログイン"}
+              ? t("createAdminAndStart")
+              : t("loginBtn")}
           </button>
         </form>
       </div>

@@ -2,6 +2,7 @@
 
 import { Check, Code2, Copy, Download, Eye, Sparkles, X } from "lucide-react";
 import React, { useState } from "react";
+import { useI18n } from "@/lib/i18n";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 export interface ArtifactItem {
@@ -107,6 +108,7 @@ export function ArtifactPanel({
   artifact: ArtifactItem;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [copied, setCopied] = useState(false);
 
@@ -160,7 +162,7 @@ export function ArtifactPanel({
               }`}
             >
               <Eye className="w-3 h-3" />
-              <span>プレビュー</span>
+              <span>{t("previewTab")}</span>
             </button>
             <button
               type="button"
@@ -172,7 +174,7 @@ export function ArtifactPanel({
               }`}
             >
               <Code2 className="w-3 h-3" />
-              <span>コード</span>
+              <span>{t("codeTab")}</span>
             </button>
           </div>
 
